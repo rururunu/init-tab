@@ -13,7 +13,7 @@ type JumpData = {
   jumpUrl: string
 }
 
-const defaultKey = ref<string>(sessionStorage.getItem("defaultKey") || "bd");
+const defaultKey = ref<string>(localStorage.getItem("defaultKey") || "bd");
 const ide = ref<string>("");
 const placeholderArray = ref<string[]>(
   [
@@ -44,21 +44,21 @@ const jumpData = ref<JumpData[]>(
 const jumpToData = ref<Map<string, JumpData>>();
 const date = ref<string>("");
 const time = ref<string>("");
-const wallpaperSubscription = ref<string>("https://www.bokewo.com/bing/bingimg.php?idx=7&mkt=en-US&img");
+const wallpaperSubscription = ref<string>("https://picsum.photos/id/237/1920/1080");
 const isWallpaperSubscription = ref<boolean>(false);
 const textColor = ref<string | null>(null);
 
-let timer: NodeJS.Timeout;
+let timer: number;
 
 
 onMounted(() => {
   init();
   updateTextColor();
   updateDateTime();
-  timer = setInterval(updateDateTime, 1000);
+  timer = window.setInterval(() => { updateDateTime() }, 1000);
 });
 onBeforeUnmount(() => {
-  clearInterval(timer);
+  window.clearInterval(timer);
 })
 
 async function updateTextColor() {
@@ -106,7 +106,7 @@ function jumpTo(jumpType: string, toData: string) {
     const jumpData = jumpToData.value?.get(toData);
     if (jumpData != null) {
       defaultKey.value = toData;
-      sessionStorage.setItem("defaultKey", defaultKey.value);
+      localStorage.setItem("defaultKey", defaultKey.value);
     }
     return;
   }
@@ -115,8 +115,9 @@ function jumpTo(jumpType: string, toData: string) {
     const toUrl = jumpData.jumpUrl.replace("&<query>", toData);
     window.open(toUrl, "_blank", "noopener,noreferrer")
   } else {
+    const toUrl = jumpType + toData;
     window.open(
-      `https://www.baidu.com/s?tn=22073068_8_oem_dg&ch=2&ie=utf-8&word=${toData}`,
+      `https://www.baidu.com/s?tn=22073068_8_oem_dg&ch=2&ie=utf-8&word=${toUrl}`,
       "_blank",
       "noopener,noreferrer"
     );
@@ -127,25 +128,29 @@ function jumpTo(jumpType: string, toData: string) {
 
 <template>
   <div id="base" :style="isWallpaperSubscription ? { backgroundImage: `url(${wallpaperSubscription})` } : {}">
-
+    <div id="mask"></div>
     <BlurReveal :delay="0.2" :duration="0.75" class="p-8">
-      <h2 class="mb-2 text-center font-bold text-5xl text-slate-700 dark:text-white`"
-        style="mix-blend-mode: difference;">
+      <h2 class="mb-2 text-center font-bold text-5xl text-slate-700 dark:text-zinc-400 select-none cursor-none"
+        :style="isWallpaperSubscription ? { color: `#fff` } : {}">
         {{ time }}
       </h2>
-      <div class="mb-10 text-center text-slate-700 dark:text-white sm:mb-20">{{ date }}</div>
-      <div class="mb-5 text-center font-bold text-slate-700 dark:text-neutral-700">
+      <div class="mb-10 text-center text-slate-700 dark:dark:text-zinc-400 sm:mb-20 select-none cursor-none"
+        :style="isWallpaperSubscription ? { color: `#fff` } : {}">{{ date }}</div>
+      <div class="mb-5 text-center font-bold text-slate-700 dark:dark:text-zinc-400 select-none cursor-none"
+        :style="isWallpaperSubscription ? { color: `#fff` } : {}">
         当前默认使用
         {{ jumpToData?.get(defaultKey)?.label }}
         搜索
       </div>
     </BlurReveal>
-    <VanishingInput v-model="ide" :placeholders="placeholderArray" @submit="submit"></VanishingInput>
+    <VanishingInput id="vanishing-input" v-model="ide" :placeholders="placeholderArray" @submit="submit">
+    </VanishingInput>
   </div>
 </template>
 
 <style scoped>
 #base {
+  position: relative;
   width: 100vw;
   height: 100vh;
   display: flex;
@@ -154,6 +159,25 @@ function jumpTo(jumpType: string, toData: string) {
   align-items: center;
   background-repeat: no-repeat;
   background-size: cover;
+}
+
+#mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1;
+  background-color: rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(0px);
+}
+
+.p-8,
+#vanishing-input {
+  position: relative;
+  /* 建立新的层级上下文 */
+  z-index: 2;
+  /* 必须大于 #mask 的 z-index */
 }
 
 @media(prefers-color-scheme: dark) {

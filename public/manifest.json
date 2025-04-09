@@ -1,0 +1,15 @@
+{
+    "manifest_version": 2,
+    "name": "INIT",
+    "version": "0.0.1",
+    "description": "简单的标签页,获取可以玩一些骚操作",
+    "chrome_url_overrides": {
+        "newtab": "index.html"
+    },
+    "icons":{
+        "16": "logo.png",
+        "48": "logo.png",
+        "128": "logo.png"
+    },
+    "author": "RUNU"
+}
