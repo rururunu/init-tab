@@ -20,7 +20,7 @@ const handleClose = () => {
     <div v-if="show" class="dialog-overlay" @click="handleClose">
       <div class="dialog-content" @click.stop>
         <div class="dialog-header">
-          <h3 class="text-xl font-bold">{{ title }}</h3>
+          <h3 class="text-xl font-bold select-none">{{ title }}</h3>
           <Icon @click="handleClose" icon="mdi:close" class="text-2xl cursor-pointer"></Icon>
         </div>
         <div class="dialog-body">
@@ -47,7 +47,7 @@ const handleClose = () => {
 }
 
 .dialog-content {
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(255, 255, 255, 0.3);
   border-radius: 12px;
   padding: 20px;
   width: 90%;
@@ -99,7 +99,7 @@ const handleClose = () => {
 /* 深色模式下的样式 */
 @media(prefers-color-scheme: dark) {
   .dialog-content {
-    background-color: rgba(30, 30, 30, 0.8);
+    background-color: rgba(30, 30, 30, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
   

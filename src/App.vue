@@ -62,8 +62,8 @@ window.addEventListener('storage', (e) => {
 
 const date = ref<string>("");
 const time = ref<string>("");
-const wallpaperSubscription = ref<string>("https://picsum.photos/id/237/1920/1080");
-const isWallpaperSubscription = ref<boolean>(false);
+const wallpaperSubscription = ref<string>("https://picsum.photos/1920/1080");
+const isWallpaperSubscription = ref<boolean>(true);
 const textColor = ref<string | null>(null);
 const setup = ref({
   show: false,
@@ -162,7 +162,9 @@ function onSetup() {
     <div id="setup" class="flex items-center gap-4">
       <Icon @click="onSetup" 
             icon="mdi:gear" 
-            class="text-slate-700 text-2xl dark:text-white cursor-pointer hover:text-slate-500 dark:hover:text-gray-300">
+            class="text-slate-700 text-2xl dark:text-white cursor-pointer hover:text-slate-500 dark:hover:text-gray-300"
+            :style="isWallpaperSubscription ? { color: `#fff` } : {}"
+            >
       </Icon>
     </div>
     <BlurReveal :delay="0.2" :duration="0.75" class="p-8">
@@ -170,7 +172,7 @@ function onSetup() {
         :style="isWallpaperSubscription ? { color: `#fff` } : {}">
         {{ time }}
       </h2>
-      <div class="mb-10 text-center text-slate-700 dark:dark:text-zinc-400 sm:mb-20 select-none cursor-none"
+      <div class="mb-10 text-center font-bold text-slate-700 dark:dark:text-zinc-400 sm:mb-20 select-none cursor-none"
         :style="isWallpaperSubscription ? { color: `#fff` } : {}">
         {{ date }}
       </div>
@@ -185,7 +187,11 @@ function onSetup() {
     </VanishingInput>
 
     <Dialog :show="setup.show" title="设置" @close="setup.show = false">
-      <div class="space-y-4">
+      <div class="space-y-4 w-[100%] h-[100%]">
+        <div class="flex flex-row justify-center w-[100%] h-[100%]">
+          <div class="w-[30%] h-[100%]"></div>
+          <div class="w-[70%] h-[100%]"></div>
+        </div>
       </div>
     </Dialog>
   </div>

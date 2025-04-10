@@ -1,4 +1,3 @@
-// 注入样式
 function injectStyles() {
   const style = document.createElement('style');
   style.textContent = `
