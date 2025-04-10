@@ -1,0 +1,98 @@
+#global-search-extension {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0);
+    backdrop-filter: blur(0px);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2147483647;
+    margin: 0;
+    padding: 0;
+    border: none;
+    outline: none;
+    box-sizing: border-box;
+    transition: all 0.3s ease-out;
+  }
+  
+  #global-search-extension.show {
+    background-color: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(20px);
+  }
+  
+  #global-search-box {
+    width: 0;
+    max-width: 600px;
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    margin: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  #global-search-box.show {
+    width: 90%;
+    opacity: 1;
+    transform: scale(1);
+  }
+  
+  #global-search-input {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    background: transparent;
+    outline: none;
+    color: #000000;
+    margin: 0;
+    box-sizing: border-box;
+    font-family: system-ui, -apple-system, sans-serif;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  #global-search-input.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  
+  #global-search-hint {
+    position: absolute;
+    top: -25px;
+    left: 0;
+    font-size: 12px;
+    color: #666;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  #global-search-hint.show {
+    opacity: 1;
+  }
+  
+  @media(prefers-color-scheme: dark) {
+    #global-search-box {
+      background-color: rgba(30, 30, 30, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    #global-search-input {
+      color: #ffffff;
+    }
+    
+    #global-search-hint {
+      color: #999;
+    }
+  }

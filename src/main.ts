@@ -2,4 +2,11 @@ import { createApp } from 'vue'
 import './style.css'
 import App from './App.vue'
 
-createApp(App).mount('#app')
+const create = createApp(App)
+
+// 创建全局搜索的挂载点
+const globalSearchContainer = document.createElement('div')
+globalSearchContainer.id = 'global-search-container'
+document.body.appendChild(globalSearchContainer)
+
+create.mount('#app')

@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import VanishingInput from './components/ui/vanishing-input/VanishingInput.vue';
 import BlurReveal from './components/ui/blur-reveal/BlurReveal.vue';
+import Dialog from './components/ui/dialog/Dialog.vue';
+import { Icon } from "@iconify/vue";
 
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import dayjs from "dayjs";
 import { getContrastTextColorFromImage } from './lib/utils';
+// import { useColorMode } from "@vueuse/core";
+// import { computed } from "vue";
 
 
 type JumpData = {
@@ -13,6 +17,7 @@ type JumpData = {
   jumpUrl: string
 }
 
+// const isDark = computed(() => useColorMode().value == "dark");
 const defaultKey = ref<string>(localStorage.getItem("defaultKey") || "bd");
 const ide = ref<string>("");
 const placeholderArray = ref<string[]>(
@@ -22,31 +27,47 @@ const placeholderArray = ref<string[]>(
     "输入cd[空格]加上搜索引擎的key,可以切换默认搜索引擎哦😋"
   ]
 );
-const jumpData = ref<JumpData[]>(
-  [
-    {
-      key: ["baidu", "bd"],
-      label: "BaiDu百度",
-      jumpUrl: `https://www.baidu.com/s?tn=22073068_8_oem_dg&ch=2&ie=utf-8&word=&<query>`
-    },
-    {
-      key: ["google", "gg"],
-      label: "Google谷歌",
-      jumpUrl: `https://www.google.com/search?q=&<query>`
-    },
-    {
-      key: ["bi", "bing"],
-      label: "Bing必应",
-      jumpUrl: `https://www.bing.com/search?form=QBLH&q=&<query>&mkt=zh-CN`
-    }
-  ]
-);
-const jumpToData = ref<Map<string, JumpData>>();
+
+// 从localStorage中读取jumpData，如果没有则使用默认值
+const defaultJumpData = [
+  {
+    key: ["baidu", "bd"],
+    label: "BaiDu百度",
+    jumpUrl: `https://www.baidu.com/s?tn=22073068_8_oem_dg&ch=2&ie=utf-8&word=&<query>`
+  },
+  {
+    key: ["google", "gg"],
+    label: "Google谷歌",
+    jumpUrl: `https://www.google.com/search?q=&<query>`
+  },
+  {
+    key: ["bi", "bing"],
+    label: "Bing必应",
+    jumpUrl: `https://www.bing.com/search?form=QBLH&q=&<query>&mkt=zh-CN`
+  }
+];
+
+const jumpData = ref<JumpData[]>(JSON.parse(localStorage.getItem("jumpData") || JSON.stringify(defaultJumpData)));
+const jumpToData = ref<Map<string, JumpData>>(new Map(JSON.parse(localStorage.getItem("jumpToData") || "[]")));
+
+// 监听localStorage变化
+window.addEventListener('storage', (e) => {
+  if (e.key === 'jumpData') {
+    jumpData.value = JSON.parse(e.newValue || JSON.stringify(defaultJumpData));
+    init();
+  } else if (e.key === 'jumpToData') {
+    jumpToData.value = new Map(JSON.parse(e.newValue || "[]"));
+  }
+});
+
 const date = ref<string>("");
 const time = ref<string>("");
 const wallpaperSubscription = ref<string>("https://picsum.photos/id/237/1920/1080");
 const isWallpaperSubscription = ref<boolean>(false);
 const textColor = ref<string | null>(null);
+const setup = ref({
+  show: false,
+})
 
 let timer: number;
 
@@ -66,12 +87,15 @@ async function updateTextColor() {
 }
 
 const init = () => {
-  jumpToData.value = new Map<string, JumpData>();
+  const newJumpToData = new Map<string, JumpData>();
   jumpData.value.forEach(data => {
     data.key.forEach(key => {
-      jumpToData.value?.set(key, data);
+      newJumpToData.set(key, data);
     })
   });
+  jumpToData.value = newJumpToData;
+  // 将jumpToData存入localStorage
+  localStorage.setItem("jumpToData", JSON.stringify(Array.from(newJumpToData.entries())));
 }
 
 const updateDateTime = () => {
@@ -115,27 +139,41 @@ function jumpTo(jumpType: string, toData: string) {
     const toUrl = jumpData.jumpUrl.replace("&<query>", toData);
     window.open(toUrl, "_blank", "noopener,noreferrer")
   } else {
-    const toUrl = jumpType + toData;
+    const data = jumpType + toData;
+    const toUrl = jumpToData.value?.get(defaultKey.value)?.jumpUrl.replace("&<query>", data);
     window.open(
-      `https://www.baidu.com/s?tn=22073068_8_oem_dg&ch=2&ie=utf-8&word=${toUrl}`,
+      toUrl,
       "_blank",
       "noopener,noreferrer"
     );
   }
 }
 
+function onSetup() {
+  setup.value.show = true;
+}
+
 </script>
 
 <template>
-  <div id="base" :style="isWallpaperSubscription ? { backgroundImage: `url(${wallpaperSubscription})` } : {}">
-    <div id="mask"></div>
+  <div id="base" class="text-slate-700 dark:text-zinc-400"
+    :style="isWallpaperSubscription ? { backgroundImage: `url(${wallpaperSubscription})` } : {}">
+    <div v-if="isWallpaperSubscription" id="mask"></div>
+    <div id="setup" class="flex items-center gap-4">
+      <Icon @click="onSetup" 
+            icon="mdi:gear" 
+            class="text-slate-700 text-2xl dark:text-white cursor-pointer hover:text-slate-500 dark:hover:text-gray-300">
+      </Icon>
+    </div>
     <BlurReveal :delay="0.2" :duration="0.75" class="p-8">
       <h2 class="mb-2 text-center font-bold text-5xl text-slate-700 dark:text-zinc-400 select-none cursor-none"
         :style="isWallpaperSubscription ? { color: `#fff` } : {}">
         {{ time }}
       </h2>
       <div class="mb-10 text-center text-slate-700 dark:dark:text-zinc-400 sm:mb-20 select-none cursor-none"
-        :style="isWallpaperSubscription ? { color: `#fff` } : {}">{{ date }}</div>
+        :style="isWallpaperSubscription ? { color: `#fff` } : {}">
+        {{ date }}
+      </div>
       <div class="mb-5 text-center font-bold text-slate-700 dark:dark:text-zinc-400 select-none cursor-none"
         :style="isWallpaperSubscription ? { color: `#fff` } : {}">
         当前默认使用
@@ -145,6 +183,11 @@ function jumpTo(jumpType: string, toData: string) {
     </BlurReveal>
     <VanishingInput id="vanishing-input" v-model="ide" :placeholders="placeholderArray" @submit="submit">
     </VanishingInput>
+
+    <Dialog :show="setup.show" title="设置" @close="setup.show = false">
+      <div class="space-y-4">
+      </div>
+    </Dialog>
   </div>
 </template>
 
@@ -178,6 +221,16 @@ function jumpTo(jumpType: string, toData: string) {
   /* 建立新的层级上下文 */
   z-index: 2;
   /* 必须大于 #mask 的 z-index */
+}
+
+#setup {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 @media(prefers-color-scheme: dark) {

@@ -1,15 +1,53 @@
 {
-    "manifest_version": 2,
-    "name": "INIT",
-    "version": "0.0.1",
-    "description": "简单的标签页,获取可以玩一些骚操作",
-    "chrome_url_overrides": {
-        "newtab": "index.html"
-    },
-    "icons":{
-        "16": "logo.png",
-        "48": "logo.png",
-        "128": "logo.png"
-    },
-    "author": "RUNU"
+  "manifest_version": 3,
+  "name": "INIT",
+  "version": "0.0.1",
+  "description": "简单的标签页,获取可以玩一些骚操作",
+  "chrome_url_overrides": {
+    "newtab": "index.html"
+  },
+  "icons": {
+    "16": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  },
+  "author": "RUNU",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-script.js"
+      ],
+      "css": [
+        "content-style.css"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "commands": {
+    "toggle-search": {
+      "suggested_key": {
+        "default": "Alt+S",
+        "mac": "Alt+S",
+        "windows": "Alt+S",
+        "linux": "Alt+S"
+      },
+      "description": "打开全局搜索"
+    }
+  }
 }
