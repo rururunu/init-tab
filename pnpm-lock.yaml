@@ -23,6 +23,9 @@ importers:
       motion-v:
         specifier: 1.0.0-beta.1
         version: 1.0.0-beta.1(vue@3.5.13(typescript@5.7.3))
+      ogl:
+        specifier: ^1.0.11
+        version: 1.0.11
       tw-animate-css:
         specifier: ^1.2.5
         version: 1.2.5
@@ -36,6 +39,9 @@ importers:
       '@inspira-ui/plugins':
         specifier: ^0.0.1
         version: 0.0.1
+      '@types/chrome':
+        specifier: ^0.0.313
+        version: 0.0.313
       '@types/node':
         specifier: ^22.14.0
         version: 22.14.0
@@ -455,8 +461,20 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6
 
+  '@types/chrome@0.0.313':
+    resolution: {integrity: sha512-9R5T7gTaYZhkxlu+Ho4wk9FL+y/werWQY2yjGWSqCuiTsqS7nL/BE5UMTP6rU7J+oIG2FRKqrEycHhJATeltVA==}
+
   '@types/estree@1.0.7':
     resolution: {integrity: sha512-w28IoSUCJpidD/TGviZwwMJckNESJZXFu7NBZ5YJ4mEUnNraUn9Pm8HSZm/jDF1pDWYKspWE7oVphigUPRakIQ==}
+
+  '@types/filesystem@0.0.36':
+    resolution: {integrity: sha512-vPDXOZuannb9FZdxgHnqSwAG/jvdGM8Wq+6N4D/d80z+D4HWH+bItqsZaVRQykAn6WEVeEkLm2oQigyHtgb0RA==}
+
+  '@types/filewriter@0.0.33':
+    resolution: {integrity: sha512-xFU8ZXTw4gd358lb2jw25nxY9QAgqn2+bKKjKOYfNCzN4DKCFetK7sPtrlpg66Ywe3vWY9FNxprZawAh9wfJ3g==}
+
+  '@types/har-format@1.2.16':
+    resolution: {integrity: sha512-fluxdy7ryD3MV6h8pTfTYpy/xQzCFC7m89nOH9y94cNqJ1mDIDPut7MnRHI3F6qRmh/cT2fUjG1MLdCNb4hE9A==}
 
   '@types/node@22.14.0':
     resolution: {integrity: sha512-Kmpl+z84ILoG+3T/zQFyAJsU6EPTmOCj8/2+83fSN6djd6I4o7uOuGIH6vq3PrjY5BGitSbFuMN18j3iknubbA==}
@@ -781,6 +799,9 @@ packages:
   normalize-range@0.1.2:
     resolution: {integrity: sha512-bdok/XvKII3nUpklnV6P2hxtMNrCboOjAcyBuQnWEhO665FwrSNRxU+AqpsyvO6LgGYPspN+lu5CLtw4jPRKNA==}
     engines: {node: '>=0.10.0'}
+
+  ogl@1.0.11:
+    resolution: {integrity: sha512-kUpC154AFfxi16pmZUK4jk3J+8zxwTWGPo03EoYA8QPbzikHoaC82n6pNTbd+oEaJonaE8aPWBlX7ad9zrqLsA==}
 
   path-browserify@1.0.1:
     resolution: {integrity: sha512-b7uo2UCUOYZcnF/3ID0lulOJi/bafxa1xPe7ZPsammBSpjSWQkjNxlt635YGS2MiR9GjvuXCtz2emr3jbsz98g==}
@@ -1277,7 +1298,20 @@ snapshots:
       tailwindcss: 4.1.3
       vite: 6.2.5(@types/node@22.14.0)(jiti@2.4.2)(lightningcss@1.29.2)(sass-embedded@1.86.3)
 
+  '@types/chrome@0.0.313':
+    dependencies:
+      '@types/filesystem': 0.0.36
+      '@types/har-format': 1.2.16
+
   '@types/estree@1.0.7': {}
+
+  '@types/filesystem@0.0.36':
+    dependencies:
+      '@types/filewriter': 0.0.33
+
+  '@types/filewriter@0.0.33': {}
+
+  '@types/har-format@1.2.16': {}
 
   '@types/node@22.14.0':
     dependencies:
@@ -1611,6 +1645,8 @@ snapshots:
   node-releases@2.0.19: {}
 
   normalize-range@0.1.2: {}
+
+  ogl@1.0.11: {}
 
   path-browserify@1.0.1: {}
 

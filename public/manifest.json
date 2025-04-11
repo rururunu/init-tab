@@ -15,7 +15,8 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "<all_urls>"

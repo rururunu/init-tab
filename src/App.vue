@@ -1,3 +1,5 @@
+///
+<reference types="chrome" />
 <script setup lang="ts">
 import VanishingInput from './components/ui/vanishing-input/VanishingInput.vue';
 import BlurReveal from './components/ui/blur-reveal/BlurReveal.vue';
@@ -9,6 +11,8 @@ import dayjs from "dayjs";
 import { getContrastTextColorFromImage } from './lib/utils';
 // import { useColorMode } from "@vueuse/core";
 // import { computed } from "vue";
+import { shallowRef } from 'vue'
+import BackgroundSettings from '@/components/settings/BackgroundSettings.vue'
 
 
 type JumpData = {
@@ -18,7 +22,7 @@ type JumpData = {
 }
 
 // const isDark = computed(() => useColorMode().value == "dark");
-const defaultKey = ref<string>(localStorage.getItem("defaultKey") || "bd");
+const defaultKey = ref<string>("bd");
 const ide = ref<string>("");
 const placeholderArray = ref<string[]>(
   [
@@ -29,7 +33,7 @@ const placeholderArray = ref<string[]>(
 );
 
 // 从localStorage中读取jumpData，如果没有则使用默认值
-const defaultJumpData = [
+const defaultJumpData: JumpData[] = [
   {
     key: ["baidu", "bd"],
     label: "BaiDu百度",
@@ -47,18 +51,8 @@ const defaultJumpData = [
   }
 ];
 
-const jumpData = ref<JumpData[]>(JSON.parse(localStorage.getItem("jumpData") || JSON.stringify(defaultJumpData)));
-const jumpToData = ref<Map<string, JumpData>>(new Map(JSON.parse(localStorage.getItem("jumpToData") || "[]")));
-
-// 监听localStorage变化
-window.addEventListener('storage', (e) => {
-  if (e.key === 'jumpData') {
-    jumpData.value = JSON.parse(e.newValue || JSON.stringify(defaultJumpData));
-    init();
-  } else if (e.key === 'jumpToData') {
-    jumpToData.value = new Map(JSON.parse(e.newValue || "[]"));
-  }
-});
+const jumpData = ref<JumpData[]>(defaultJumpData);
+const jumpToData = ref<Map<string, JumpData>>();
 
 const date = ref<string>("");
 const time = ref<string>("");
@@ -68,15 +62,33 @@ const textColor = ref<string | null>(null);
 const setup = ref({
   show: false,
 })
+const selectedSection = ref<string>("background");
+const setUpSelect = ref([
+  {
+    key: "img",
+    icon: "line-md:image-twotone",
+    label: "背景设置",
+    in: BackgroundSettings,
+  },
+  {
+    key: "jump",
+    icon: "line-md:search-twotone",
+    label: "搜索引擎",
+    in: "",
+  }
+]);
+const currentSettingComponent = shallowRef<any>(null)
+
 
 let timer: number;
 
 
 onMounted(() => {
-  init();
+  // init();
   updateTextColor();
   updateDateTime();
   timer = window.setInterval(() => { updateDateTime() }, 1000);
+  setUpClick(setUpSelect.value[0].key)
 });
 onBeforeUnmount(() => {
   window.clearInterval(timer);
@@ -87,15 +99,43 @@ async function updateTextColor() {
 }
 
 const init = () => {
-  const newJumpToData = new Map<string, JumpData>();
-  jumpData.value.forEach(data => {
-    data.key.forEach(key => {
-      newJumpToData.set(key, data);
-    })
+  chrome.storage.local.set(
+    {
+      jumpData: JSON.stringify(jumpData.value),
+      defaultKey: defaultKey.value,
+    }, () => { }
+  );
+  chrome.storage.local.get(["defalutKey", "jumpData"], result => {
+    if (result.defaultKey) {
+      defaultKey.value = result.defaultKey || "bd";
+    }
+    if (result.jumpData) {
+      jumpData.value = JSON.parse(result.jumpData);
+    }
+    jumpToData.value = new Map<string, JumpData>();
+    jumpData.value.forEach(data => {
+      data.key.forEach(key => {
+        jumpToData.value?.set(key, data);
+      })
+    });
   });
-  jumpToData.value = newJumpToData;
-  // 将jumpToData存入localStorage
-  localStorage.setItem("jumpToData", JSON.stringify(Array.from(newJumpToData.entries())));
+}
+
+const refresh = () => {
+  chrome.storage.local.get(["defalutKey", "jumpData"], (result) => {
+    if (result.defaultKey) {
+      defaultKey.value = result.defaultKey;
+    }
+    if (result.jumpData) {
+      jumpData.value = JSON.parse(result.jumpData);
+    }
+    jumpToData.value = new Map<string, JumpData>();
+    jumpData.value.forEach(data => {
+      data.key.forEach(key => {
+        jumpToData.value?.set(key, data);
+      })
+    });
+  });
 }
 
 const updateDateTime = () => {
@@ -130,7 +170,9 @@ function jumpTo(jumpType: string, toData: string) {
     const jumpData = jumpToData.value?.get(toData);
     if (jumpData != null) {
       defaultKey.value = toData;
-      localStorage.setItem("defaultKey", defaultKey.value);
+      chrome.storage.local.set({ defaultKey: defaultKey.value }, () => {
+        refresh();
+      });
     }
     return;
   }
@@ -153,6 +195,12 @@ function onSetup() {
   setup.value.show = true;
 }
 
+function setUpClick(select: string) {
+  selectedSection.value = select;
+  const selected = setUpSelect.value.find(item => item.key === select)
+  currentSettingComponent.value = selected?.in || null
+}
+
 </script>
 
 <template>
@@ -160,11 +208,9 @@ function onSetup() {
     :style="isWallpaperSubscription ? { backgroundImage: `url(${wallpaperSubscription})` } : {}">
     <div v-if="isWallpaperSubscription" id="mask"></div>
     <div id="setup" class="flex items-center gap-4">
-      <Icon @click="onSetup" 
-            icon="mdi:gear" 
-            class="text-slate-700 text-2xl dark:text-white cursor-pointer hover:text-slate-500 dark:hover:text-gray-300"
-            :style="isWallpaperSubscription ? { color: `#fff` } : {}"
-            >
+      <Icon @click="onSetup" icon="line-md:cog-filled"
+        class="text-slate-700 text-2xl dark:text-white cursor-pointer hover:text-slate-500 dark:hover:text-gray-300"
+        :style="isWallpaperSubscription ? { color: `#fff` } : {}">
       </Icon>
     </div>
     <BlurReveal :delay="0.2" :duration="0.75" class="p-8">
@@ -186,11 +232,22 @@ function onSetup() {
     <VanishingInput id="vanishing-input" v-model="ide" :placeholders="placeholderArray" @submit="submit">
     </VanishingInput>
 
-    <Dialog :show="setup.show" title="设置" @close="setup.show = false">
+    <Dialog :show="setup.show" :select="setUpSelect" title="设置" @close="setup.show = false">
       <div class="space-y-4 w-[100%] h-[100%]">
         <div class="flex flex-row justify-center w-[100%] h-[100%]">
-          <div class="w-[30%] h-[100%]"></div>
-          <div class="w-[70%] h-[100%]"></div>
+          <div class="w-[20%] h-[100%] border-r-1 border-dotted select-none px-2">
+            <div class="h-[20%] bg-amber-600">123</div>
+            <div v-for="(select, index) in setUpSelect" :key="index"
+              class="flex flex-row content-center items-center w-[100%] p-1.5 rounded-xl text-gray-900 pl-[18%]"
+              :style="selectedSection == select.key ? { backgroundColor: '#006BDF', color: 'white' } : {}"
+              @click="setUpClick(select.key)">
+              <Icon :icon="select.icon"></Icon>
+              <span class="ml-2">{{ select.label }}</span>
+            </div>
+          </div>
+          <div class="w-[80%] h-[100%]" id="settings-page">
+            <component :is="currentSettingComponent" />
+          </div>
         </div>
       </div>
     </Dialog>

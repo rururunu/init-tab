@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import { onMounted, ref, shallowRef } from "vue";
 
-defineProps<{
+const selectedSection = ref<string>("");
+const currentSettingComponent = shallowRef<any>(null)
+
+onMounted(() => {
+  setUpClick(props.select[0].key)
+})
+
+const props = defineProps<{
   show: boolean;
-  title?: string;
+  select: any[];
 }>();
 
 const emit = defineEmits<{
@@ -13,18 +21,43 @@ const emit = defineEmits<{
 const handleClose = () => {
   emit('close');
 };
+
+function setUpClick(select: string) {
+  selectedSection.value = select;
+  const selected = props.select.find(item => item.key === select)
+  currentSettingComponent.value = selected?.in || null
+}
+
+
 </script>
 
 <template>
   <Transition name="dialog">
     <div v-if="show" class="dialog-overlay" @click="handleClose">
-      <div class="dialog-content" @click.stop>
+      <!-- <div class="dialog-content" @click.stop>
         <div class="dialog-header">
           <h3 class="text-xl font-bold select-none">{{ title }}</h3>
           <Icon @click="handleClose" icon="mdi:close" class="text-2xl cursor-pointer"></Icon>
         </div>
         <div class="dialog-body">
           <slot></slot>
+        </div>
+      </div> -->
+      <div class="dialog-content" @click.stop>
+        <div class="w-[20%] h-[100%] border-r-1 border-[#B2B2B2] select-none px-2 ">
+          <div class="h-[8%] flex flex-row items-center">
+            <Icon @click="handleClose" icon="mdi:close" class="text-2xl cursor-pointer ml-2"></Icon>
+          </div>
+          <div v-for="(select, index) in select" :key="index"
+            class="flex flex-row content-center items-center w-[100%] p-1.5 rounded-xl text-gray-900 pl-[18%]"
+            :style="selectedSection == select.key ? { backgroundColor: '#006BDF', color: 'white' } : {}"
+            @click="setUpClick(select.key)">
+            <Icon :icon="select.icon"></Icon>
+            <span class="ml-2">{{ select.label }}</span>
+          </div>
+        </div>
+        <div class="w-[80%] h-[100%] bg-[color:rgba(255,255,255,0.5)] rounded-r-[12px]">
+          <component :is="currentSettingComponent" />
         </div>
       </div>
     </div>
@@ -47,22 +80,24 @@ const handleClose = () => {
 }
 
 .dialog-content {
-  background-color: rgba(255, 255, 255, 0.3);
+  background-color: rgba(255, 255, 255, 0.5);
   border-radius: 12px;
-  padding: 20px;
   width: 90%;
-  max-width: 600px;
+  max-width: 900px;
   height: 60vh;
   max-height: 600px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  display: flex;
-  flex-direction: column;
   transition: all 0.3s ease;
+  display: flex;
+  flex-direction: row;
 }
 
 .dialog-header {
+  padding-top: 20px;
+  padding-left: 20px;
+  padding-right: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -75,7 +110,7 @@ const handleClose = () => {
   color: #1a1a1a;
   flex: 1;
   overflow-y: auto;
-  padding-right: 8px;
+  padding-bottom: 20px;
 }
 
 .dialog-body::-webkit-scrollbar {
@@ -99,11 +134,12 @@ const handleClose = () => {
 /* 深色模式下的样式 */
 @media(prefers-color-scheme: dark) {
   .dialog-content {
-    background-color: rgba(30, 30, 30, 0.3);
+    background-color: rgba(30, 30, 30, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-  
-  .dialog-header, .dialog-body {
+
+  .dialog-header,
+  .dialog-body {
     color: #ffffff;
   }
 }
@@ -130,4 +166,4 @@ const handleClose = () => {
   transform: scale(1);
   opacity: 1;
 }
-</style> 
+</style>
