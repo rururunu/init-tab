@@ -1,43 +1,94 @@
-// 监听安装事件
-chrome.runtime.onInstalled.addListener(() => {
-  });
-  
-  // 监听快捷键命令
-  chrome.commands.onCommand.addListener(async (command) => {
-    if (command === 'toggle-search') {
-      try {
-        // 获取当前活动标签页
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab) {
-          // 注入内容脚本（如果还没注入）
-          try {
-            await chrome.scripting.executeScript({
-              target: { tabId: tab.id },
-              files: ['content-script.js']
-            });
-          } catch (e) {
-            // 忽略已经注入的错误
-          }
-          
-          // 发送消息给内容脚本
-          let retryCount = 0;
-          const maxRetries = 10;
-          
-          const sendMessage = async () => {
-            try {
-              await chrome.tabs.sendMessage(tab.id, { action: 'SHOW_SEARCH' });
-            } catch (e) {
-              if (retryCount < maxRetries) {
-                retryCount++;
-                setTimeout(sendMessage, 100);
-              }
+// 1. 更严格的环境检查
+const isExtensionEnvironment = typeof chrome !== 'undefined' && 
+    chrome.runtime && 
+    chrome.runtime.onMessage && 
+    chrome.commands && 
+    chrome.tabs;
+
+// 2. 存储工具
+const storage = {
+    async set(key, value) {
+        try {
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                await chrome.storage.local.set({ [key]: value });
+            } else {
+                localStorage.setItem(key, JSON.stringify(value));
             }
-          };
-          
-          await sendMessage();
+        } catch (e) {
+            console.error('Storage set error:', e);
+            try {
+                localStorage.setItem(key, JSON.stringify(value));
+            } catch (localError) {
+                console.error('LocalStorage set error:', localError);
+            }
         }
-      } catch (error) {
-        console.error('Error:', error);
-      }
+    },
+
+    async get(key) {
+        try {
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                const result = await chrome.storage.local.get(key);
+                return result[key];
+            } else {
+                const item = localStorage.getItem(key);
+                return item ? JSON.parse(item) : null;
+            }
+        } catch (e) {
+            console.error('Storage get error:', e);
+            try {
+                const item = localStorage.getItem(key);
+                return item ? JSON.parse(item) : null;
+            } catch (localError) {
+                console.error('LocalStorage get error:', localError);
+                return null;
+            }
+        }
     }
-  });
+};
+
+// 3. 将所有扩展API调用包装在环境检查中
+if (isExtensionEnvironment) {
+    // 监听快捷键命令
+    chrome.commands.onCommand.addListener(async (command) => {
+        console.log('Command received:', command);
+        
+        if (command === 'toggle-search') {
+            try {
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (!tab?.id || !tab?.url) {
+                    console.error('Invalid tab:', tab);
+                    return;
+                }
+
+                // 只在允许的URL上注入脚本
+                if (tab.url.startsWith('http') || tab.url.startsWith('https')) {
+                    try {
+                        await chrome.scripting.executeScript({
+                            target: { tabId: tab.id },
+                            files: ['content-script.js']
+                        });
+                        console.log('Script injection successful');
+                    } catch (e) {
+                        // 忽略已注入的错误
+                        if (!e.message.includes('Cannot access contents of url')) {
+                            console.error('Script injection error:', e);
+                        }
+                    }
+
+                    // 发送消息
+                    await chrome.tabs.sendMessage(tab.id, { 
+                        action: 'SHOW_SEARCH',
+                        timestamp: Date.now()
+                    });
+                }
+            } catch (error) {
+                console.error('Command handling error:', error);
+            }
+        }
+    });
+
+    // 只在安装时执行的代码
+    chrome.runtime.onInstalled.addListener((details) => {
+        console.log('Extension installed/updated:', details.reason);
+    });
+}

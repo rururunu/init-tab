@@ -2,7 +2,6 @@
 import { Icon } from "@iconify/vue";
 import { onMounted, ref, shallowRef } from "vue";
 
-const selectedSection = ref<string>("");
 const currentSettingComponent = shallowRef<any>(null)
 
 onMounted(() => {
@@ -23,9 +22,11 @@ const handleClose = () => {
 };
 
 function setUpClick(select: string) {
-  selectedSection.value = select;
-  const selected = props.select.find(item => item.key === select)
-  currentSettingComponent.value = selected?.in || null
+  props.select.forEach((item) => {
+    if (item.key === select) {
+      currentSettingComponent.value = item
+    }
+  });
 }
 
 
@@ -34,30 +35,23 @@ function setUpClick(select: string) {
 <template>
   <Transition name="dialog">
     <div v-if="show" class="dialog-overlay" @click="handleClose">
-      <!-- <div class="dialog-content" @click.stop>
-        <div class="dialog-header">
-          <h3 class="text-xl font-bold select-none">{{ title }}</h3>
-          <Icon @click="handleClose" icon="mdi:close" class="text-2xl cursor-pointer"></Icon>
-        </div>
-        <div class="dialog-body">
-          <slot></slot>
-        </div>
-      </div> -->
       <div class="dialog-content" @click.stop>
         <div class="w-[20%] h-[100%] border-r-1 border-[#B2B2B2] select-none px-2 ">
-          <div class="h-[8%] flex flex-row items-center">
-            <Icon @click="handleClose" icon="mdi:close" class="text-2xl cursor-pointer ml-2"></Icon>
+          <div class="h-[10%] flex flex-row items-center">
+            <Icon @click="handleClose" icon="fluent-color:dismiss-circle-48" class="text-2xl cursor-pointer ml-2">
+            </Icon>
           </div>
           <div v-for="(select, index) in select" :key="index"
-            class="flex flex-row content-center items-center w-[100%] p-1.5 rounded-xl text-gray-900 pl-[18%]"
-            :style="selectedSection == select.key ? { backgroundColor: '#006BDF', color: 'white' } : {}"
+            class="flex flex-row content-center items-center w-[100%] p-1.5 rounded-xl text-gray-900 pl-[18%] mt-1"
+            :style="currentSettingComponent.key == select.key ? { backgroundColor: '#006BDF', color: 'white' } : {}"
             @click="setUpClick(select.key)">
             <Icon :icon="select.icon"></Icon>
             <span class="ml-2">{{ select.label }}</span>
           </div>
         </div>
         <div class="w-[80%] h-[100%] bg-[color:rgba(255,255,255,0.5)] rounded-r-[12px]">
-          <component :is="currentSettingComponent" />
+          <div class="h-[10%] border-b-1 border-[#B2B2B2] flex flex-row items-center pl-3">{{ currentSettingComponent.label }}</div>
+          <component class="h-[90%] overflow-auto" :is="currentSettingComponent.in" />
         </div>
       </div>
     </div>
@@ -92,6 +86,86 @@ function setUpClick(select: string) {
   transition: all 0.3s ease;
   display: flex;
   flex-direction: row;
+  overflow: hidden;
+}
+
+/* 自定义滚动条样式 */
+.dialog-content {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.dialog-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.dialog-content::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.dialog-content::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.dialog-content::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* 左侧菜单滚动条 */
+.w-\[20\%\] {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  overflow-y: auto;
+}
+
+.w-\[20\%\]::-webkit-scrollbar {
+  width: 4px;
+}
+
+.w-\[20\%\]::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 2px;
+}
+
+.w-\[20\%\]::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+  transition: background-color 0.2s ease;
+}
+
+.w-\[20\%\]::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* 暗色模式下的滚动条样式 */
+@media (prefers-color-scheme: dark) {
+  .dialog-content {
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+
+  .dialog-content::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .dialog-content::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .w-\[20\%\] {
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+
+  .w-\[20\%\]::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .w-\[20\%\]::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
 }
 
 .dialog-header {
@@ -111,24 +185,6 @@ function setUpClick(select: string) {
   flex: 1;
   overflow-y: auto;
   padding-bottom: 20px;
-}
-
-.dialog-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.dialog-body::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 3px;
-}
-
-.dialog-body::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
-}
-
-.dialog-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
 }
 
 /* 深色模式下的样式 */
