@@ -36,21 +36,23 @@ function setUpClick(select: string) {
   <Transition name="dialog">
     <div v-if="show" class="dialog-overlay" @click="handleClose">
       <div class="dialog-content" @click.stop>
-        <div class="w-[20%] h-[100%] border-r-1 border-[#B2B2B2] select-none px-2 ">
+        <div class="w-[20%] h-[100%] border-r-1 border-[#B2B2B2] select-none px-2 dark:border-[#000000]">
           <div class="h-[10%] flex flex-row items-center">
             <Icon @click="handleClose" icon="fluent-color:dismiss-circle-48" class="text-2xl cursor-pointer ml-2">
             </Icon>
           </div>
           <div v-for="(select, index) in select" :key="index"
-            class="flex flex-row content-center items-center w-[100%] p-1.5 rounded-xl text-gray-900 pl-[18%] mt-1"
+            class="flex flex-row content-center items-center w-[100%] p-1.5 rounded-xl text-gray-900 pl-[18%] mt-1 dark:text-white"
             :style="currentSettingComponent.key == select.key ? { backgroundColor: '#006BDF', color: 'white' } : {}"
             @click="setUpClick(select.key)">
             <Icon :icon="select.icon"></Icon>
             <span class="ml-2">{{ select.label }}</span>
           </div>
         </div>
-        <div class="w-[80%] h-[100%] bg-[color:rgba(255,255,255,0.5)] rounded-r-[12px]">
-          <div class="h-[10%] border-b-1 border-[#B2B2B2] flex flex-row items-center pl-3">{{ currentSettingComponent.label }}</div>
+        <div
+          class="w-[80%] h-[100%] bg-[color:rgba(255,255,255,0.5)] dark:bg-[color:rgba(30,30,30,0.5)] rounded-r-[12px] ">
+          <div class="h-[10%] border-b-1 border-[#B2B2B2] dark:text-white flex flex-row items-center pl-3 dark:border-[#000000]">{{
+            currentSettingComponent.label }}</div>
           <component class="h-[90%] overflow-auto" :is="currentSettingComponent.in" />
         </div>
       </div>

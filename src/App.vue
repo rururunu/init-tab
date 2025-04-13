@@ -81,7 +81,7 @@ const setup = ref({
   show: false,
 })
 const selectedSection = ref<string>("background");
-const setUpSelect = ref([
+const setUpSelect = shallowRef([
   {
     key: "img",
     icon: "fluent-color:image-48",
@@ -339,17 +339,17 @@ function setUpClick(select: string) {
         <div id="setup" class="flex items-center gap-4 z-[200]">
           <Icon @click="onSetup" icon="line-md:cog-filled"
             class="text-slate-700 text-2xl dark:text-white cursor-pointer hover:text-slate-500 dark:hover:text-gray-300"
-            :class="{ 'text-white': wallpaperType !== 'none' }">
+            :class="{ '!text-white dark:!text-neutral-800': wallpaperType !== 'none' }">
           </Icon>
         </div>
 
         <BlurReveal :delay="0.2" :duration="0.75" class="p-8">
           <h2 class="mb-5 text-center font-bold text-8xl text-slate-700 dark:text-zinc-400 select-none cursor-none"
-            :class="{ 'text-white': wallpaperType !== 'none' }">
+            :class="{ '!text-white dark:!text-neutral-800': wallpaperType !== 'none' }">
             {{ time }}
           </h2>
           <div class="mb-30 text-center text-5xl font-bold text-slate-700 dark:text-zinc-400 sm:mb-50 select-none cursor-none"
-            :class="{ 'text-white': wallpaperType !== 'none' }">
+            :class="{ '!text-white dark:!text-neutral-800': wallpaperType !== 'none' }">
             {{ date }}
           </div>
         </BlurReveal>
