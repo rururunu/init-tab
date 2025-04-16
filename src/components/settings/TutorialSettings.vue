@@ -38,15 +38,10 @@
       <div class="tutorial-section">
         <h3 class="text-xl font-semibold mb-2">收藏夹搜索</h3>
         <div class="space-y-2">
-          <p>1. 输入 "*" 符号开头，后面跟要搜索的内容</p>
-          <p>2. 支持中文/英文搜索和拼音首字母匹配</p>
+          <p>输入 "*" 符号开头，后面跟要搜索的内容</p>
           <div class="example-box">
             <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">*项目文档</span>
             <span class="text-gray-500 ml-2">搜索标题/URL包含"项目文档"的书签</span>
-          </div>
-          <div class="example-box">
-            <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">*xmwd</span>
-            <span class="text-gray-500 ml-2">匹配拼音首字母（如：xiangmuwendang）</span>
           </div>
         </div>
       </div>

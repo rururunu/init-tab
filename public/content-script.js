@@ -325,46 +325,14 @@ async function searchBookmarks(query) {
   try {
     const cached = await storage.get('cachedBookmarks');
     if (!cached) return [];
-    
+
     const bookmarks = JSON.parse(cached);
     const lowerQuery = query.toLowerCase();
-    const isPinyinSearch = /^[a-zA-Z]+$/.test(query);
 
     return bookmarks.filter(b => {
-      // 直接匹配逻辑
-      const directMatch = b.title?.toLowerCase().includes(lowerQuery) || 
-                         b.url?.toLowerCase().includes(lowerQuery);
-      if (directMatch) return true;
-
-      // 拼音匹配逻辑优化
-      if (isPinyinSearch && b.title) {
-        try {
-          const titleFirst = pinyin(b.title, {
-            style: pinyin.STYLE_FIRST_LETTER,
-            heteronym: false
-          }).flat().join('').toLowerCase();
-
-          const titleFull = pinyin(b.title, {
-            style: pinyin.STYLE_NORMAL,
-            heteronym: false
-          }).flat().join('').toLowerCase();
-
-          // 新增调试日志
-          console.log('[DEBUG] Bookmark:', 
-            'Title:', b.title,
-            'First:', titleFirst, 
-            'Full:', titleFull);
-
-          return titleFirst.includes(lowerQuery) || 
-                 titleFull.includes(lowerQuery) ||
-                 titleFull.replace(/'/g, '').includes(lowerQuery);
-        } catch(e) {
-          console.error('拼音处理错误:', e);
-          return false;
-        }
-      }
-      return false;
-    }).slice(0, 50);
+      return b.title?.toLowerCase().includes(lowerQuery) ||
+        b.url?.toLowerCase().includes(lowerQuery);
+    }).slice(0, 5);
   } catch (e) {
     console.error('搜索失败:', e);
     return [];
@@ -398,7 +366,7 @@ const updateBookmarkResults = (results, selectedIndex = -1) => {
   if (!container) return;
 
   container.innerHTML = '';
-  
+
   if (results.length === 0) {
     const noResults = document.createElement('div');
     noResults.className = 'no-results';
@@ -416,7 +384,7 @@ const updateBookmarkResults = (results, selectedIndex = -1) => {
       transition: box-shadow 0.2s, background-color 0.2s, border 0.2s;
       border: 2px solid transparent; // 默认边框透明
     `;
-    
+
     // 选中时的样式
     if (index === selectedIndex) {
       item.style.boxShadow = '0 0 10px rgba(4, 109, 223, 1)'; // 蓝色发光边框
@@ -435,10 +403,10 @@ const updateBookmarkResults = (results, selectedIndex = -1) => {
       `;
       item.appendChild(hint);
     }
-    
+
     const content = document.createElement('div');
     content.className = 'bookmark-content';
-    
+
     const title = document.createElement('div');
     title.className = 'bookmark-title';
     title.textContent = bookmark.title;
@@ -446,7 +414,7 @@ const updateBookmarkResults = (results, selectedIndex = -1) => {
       font-weight: 500;
       margin-bottom: 4px;
     `;
-    
+
     const url = document.createElement('div');
     url.className = 'bookmark-url';
     url.textContent = bookmark.url;
@@ -459,17 +427,17 @@ const updateBookmarkResults = (results, selectedIndex = -1) => {
       max-width: 100%;
       display: block;
     `;
-    
+
     content.appendChild(title);
     content.appendChild(url);
     item.appendChild(content);
-    
+
     item.addEventListener('click', () => {
       if (bookmark.url) {
         window.open(bookmark.url, '_blank', 'noopener,noreferrer');
       }
     });
-    
+
     // 添加悬浮效果
     item.addEventListener('mouseenter', () => {
       item.style.boxShadow = '0 0 10px rgba(4, 109, 223, 1)'; // 悬浮时的发光边框
@@ -507,7 +475,7 @@ const handleKeyNavigation = (e) => {
   if (!document.getElementById('bookmark-results')?.style.display === 'block') return;
 
   const maxIndex = Math.min(currentBookmarkResults.length - 1, 4);
-  
+
   switch (e.key) {
     case 'ArrowUp':
       e.preventDefault();
@@ -541,11 +509,11 @@ const handleKeyNavigation = (e) => {
 const scrollToSelected = () => {
   const container = document.getElementById('bookmark-results');
   const selectedItem = container?.querySelector('.bookmark-item.selected');
-  
+
   if (container && selectedItem) {
     const containerRect = container.getBoundingClientRect();
     const itemRect = selectedItem.getBoundingClientRect();
-    
+
     if (itemRect.top < containerRect.top) {
       container.scrollTop -= (containerRect.top - itemRect.top);
     } else if (itemRect.bottom > containerRect.bottom) {
@@ -597,24 +565,21 @@ const createSearchContainer = () => {
   // 修改输入事件监听
   input.addEventListener('input', async (e) => {
     const value = e.target.value.trim();
-    console.log('Input value:', value);
-    
+
     // 重置搜索状态
     selectedBookmarkIndex = -1;
     currentBookmarkResults = [];
-    
+
     // 处理收藏夹搜索
     if (value.startsWith('*')) {
       const searchQuery = value.slice(1).trim();
-      console.log('Searching bookmarks for:', searchQuery);
-      
+
       if (searchQuery) {
         try {
           currentBookmarkResults = await searchBookmarks(searchQuery);
-          console.log('Found bookmarks:', currentBookmarkResults);
           updateBookmarkResults(currentBookmarkResults);
           updateSearchHint(`搜索收藏夹: ${searchQuery}`);
-          
+
           const bookmarkResults = document.getElementById('bookmark-results');
           if (bookmarkResults) {
             bookmarkResults.style.display = 'block';
@@ -645,7 +610,7 @@ const createSearchContainer = () => {
     const enginesList = document.getElementById('search-engines-list');
     if (bookmarkResults) bookmarkResults.style.display = 'none';
     if (enginesList) enginesList.style.display = 'none';
-    
+
     // 原有的搜索逻辑
     init();
     updateSearchHint(`使用默认引擎 ${jumpToData.get(defaultKey).label} 搜索 | 输入 cd 查看可用搜索引擎`);
@@ -660,7 +625,7 @@ const createSearchContainer = () => {
       }
       return;
     }
-    
+
     if (e.key === 'Enter' && input.value.trim()) {
       const content = input.value.trim();
       if (content.startsWith("/")) {
@@ -781,7 +746,6 @@ if (isExtensionEnvironment) {
     if (request.action === 'SHOW_SEARCH') {
       showSearchBox();
     } else if (request.action === 'UPDATE_JUMP_DATA') {
-      console.log('request.data', request.data);
       // 更新搜索引擎数据
       jumpData = request.data;
       // 重新初始化 jumpToData Map
@@ -856,8 +820,6 @@ async function init() {
 
     // 更新搜索提示
     updateSearchHint(`使用默认引擎 ${jumpToData.get(defaultKey).label} 搜索 | 输入 cd 查看可用搜索引擎`);
-
-    console.log('Content script initialized with defaultKey:', defaultKey);
   } catch (e) {
     console.error('Content script init error:', e);
   }

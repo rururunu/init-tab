@@ -16,7 +16,6 @@
     "lucide-vue-next": "^0.487.0",
     "motion-v": "1.0.0-beta.1",
     "ogl": "^1.0.11",
-    "pinyin": "4.0.0-alpha.2",
     "segmentit": "^2.0.3",
     "tw-animate-css": "^1.2.5",
     "vue": "^3.5.13"
@@ -26,7 +25,6 @@
     "@inspira-ui/plugins": "^0.0.1",
     "@types/chrome": "^0.0.313",
     "@types/node": "^22.14.0",
-    "@types/pinyin": "^2.10.2",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/tsconfig": "^0.7.0",
     "autoprefixer": "^10.4.21",

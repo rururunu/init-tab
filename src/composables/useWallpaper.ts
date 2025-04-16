@@ -36,7 +36,7 @@ export function useWallpaper() {
                 storedUrl = chromeData.wallpaperUrl || null;
                 storedSourceUrl = chromeData.sourceUrl || null;
                 storedShowMask = chromeData.showMask ?? true;
-                storedHistory = chromeData.wallpaperHistory || null;
+                storedHistory = JSON.parse(chromeData.wallpaperHistory) || null;
             }
 
             // 如果 chrome.storage.local 没有值，从 localStorage 获取
@@ -86,7 +86,7 @@ export function useWallpaper() {
                     wallpaperUrl: wallpaperUrl.value,
                     sourceUrl: sourceUrl.value,
                     showMask: showMask.value,
-                    wallpaperHistory: historyList.value
+                    wallpaperHistory: JSON.stringify(historyList.value)
                 });
             }
 

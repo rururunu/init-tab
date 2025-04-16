@@ -15,7 +15,6 @@ import SearchEngineSettings from '@/components/settings/SearchEngineSettings.vue
 import TutorialSettings from '@/components/settings/TutorialSettings.vue'
 import { useWallpaper } from './composables/useWallpaper';
 import { storage } from '@/utils/storage';
-import pinyin from 'pinyin';
 
 
 type JumpData = {
@@ -224,7 +223,6 @@ const loadEngines = async () => {
 if (typeof window.chrome !== 'undefined' && window.chrome.storage?.local?.onChanged) {
   window.chrome.storage.local.onChanged.addListener((changes, namespace) => {
     if (namespace === 'local' && changes.jumpData) {
-      console.log('changes.jumpData', changes.jumpData);
       const newValue = changes.jumpData.newValue;
       if (newValue && Array.isArray(newValue)) {
         // jumpData.value = newValue;
@@ -441,38 +439,6 @@ const searchBookmarks = async (query: string) => {
       const results = await window.chrome.bookmarks.search(query);
       // 过滤掉文件夹，只显示书签
       const bookmarks = results.filter((item: chrome.bookmarks.BookmarkTreeNode) => item.url);
-
-      // 如果查询是纯字母，尝试匹配拼音首字母和完整拼音
-      if (/^[a-zA-Z]+$/.test(query)) {
-        const pinyinResults = bookmarks.filter(bookmark => {
-          // 修复点1：使用正确的拼音样式参数
-          // 修复点2：添加扁平化处理(flat)
-          const titleFirst = pinyin(bookmark.title, {
-            style: pinyin.STYLE_FIRST_LETTER,  // 首字母风格
-            heteronym: false
-          }).flat().join('').toLowerCase();
-
-          const titleFull = pinyin(bookmark.title, {
-            style: pinyin.STYLE_NORMAL,  // 完整拼音风格
-            heteronym: false
-          }).flat().join('').toLowerCase();
-
-          // 新增调试日志
-          console.log('Title:', bookmark.title, 
-                     'First:', titleFirst, 
-                     'Full:', titleFull);
-
-          return titleFirst.includes(query.toLowerCase()) || 
-                 titleFull.includes(query.toLowerCase());
-        });
-
-        // 如果有拼音匹配的结果，优先显示
-        if (pinyinResults.length > 0) {
-          bookmarkResults.value = pinyinResults;
-          return;
-        }
-      }
-
       // 如果没有拼音匹配的结果，显示原始搜索结果
       bookmarkResults.value = bookmarks;
     }

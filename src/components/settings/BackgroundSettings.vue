@@ -33,11 +33,11 @@
       <div v-if="wallpaperType === 'custom'" class="space-y-3">
         <div class="flex flex-row items-center space-x-2">
           <MacInput v-model="backgroundUrl" placeholder="请输入图片链接" class="flex-1" />
-          <MacButton @click="applyBackgroundUrl" class="p-2" title="应用">
-            <span class="material-symbols text-lg">应用</span>
+          <MacButton @click="applyBackgroundUrl" class="p-2" icon="line-md:circle-twotone-to-confirm-circle-transition">
+            应用
           </MacButton>
-          <MacButton @click="handleUploadClick" class="p-2" title="上传">
-            <span class="material-symbols text-lg">上传</span>
+          <MacButton @click="handleUploadClick" class="p-2" icon="material-symbols:upload">
+            上传
           </MacButton>
           <input type="file" @change="fileUp" id="fileInput" class="hidden" accept=".jpg,.png,.jpeg,.gif,.webp,.mp4" />
         </div>
@@ -53,7 +53,6 @@
               <div class="loading-spinner"></div>
               <div class="flex-1">
                 <p class="text-sm font-medium text-gray-900 dark:text-white">
-                  <i class="material-symbols text-lg mr-2">cloud_upload</i>
                   <span>正在上传图片...</span>
                 </p>
                 <p class="text-xs text-gray-500 dark:text-gray-400">
@@ -99,7 +98,7 @@
                   <button @click.stop="removeFromHistory(item.url)" 
                     class="flex items-center justify-center text-red-400 hover:text-red-500 backdrop-blur-sm bg-white/20 hover:bg-white/30 rounded-full transition-all duration-200 overflow-hidden">
                     <span class="w-6 h-6 flex items-center justify-center text-base">×</span>
-                    <span class="w-0 group-hover:w-16 transition-all duration-200 whitespace-nowrap overflow-hidden text-xs pl-1">
+                    <span class="w-0 group-hover:w-16 transition-all duration-200 whitespace-nowrap overflow-hidden text-xs px-1">
                       删除壁纸
                     </span>
                   </button>
@@ -122,8 +121,8 @@
         </p>
         <div class="flex flex-row items-center space-x-2">
           <MacInput v-model="sourceUrlInput" placeholder="请输入壁纸源链接" class="flex-1" />
-          <MacButton @click="applySourceUrl" class="p-2" title="应用">
-            <i class="material-symbols text-lg">应用</i>
+          <MacButton @click="applySourceUrl" class="p-2" icon="line-md:circle-twotone-to-confirm-circle-transition">
+            应用
           </MacButton>
         </div>
         <div class="text-xs text-gray-500 dark:text-zinc-500 ml-7">
@@ -223,22 +222,6 @@ const applyBackgroundUrl = async () => {
     // 设置新的壁纸
     recentImage.value = backgroundUrl.value;
     await updateWallpaper("custom", backgroundUrl.value);
-    success("背景已更新", "新的背景图片已应用");
-  } catch (e) {
-    error("应用背景失败", e?.toString());
-  } finally {
-    isLoading.value = false;
-  }
-};
-
-// 应用背景
-const applyBackground = async () => {
-  if (isLoading.value || !recentImage.value) return;
-
-  isLoading.value = true;
-  try {
-    backgroundUrl.value = recentImage.value;
-    await updateWallpaper("custom", recentImage.value);
     success("背景已更新", "新的背景图片已应用");
   } catch (e) {
     error("应用背景失败", e?.toString());

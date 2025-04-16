@@ -29,7 +29,6 @@
         "<all_urls>"
       ],
       "js": [
-        "pinyin.js",
         "content-script.js"
       ],
       "css": [

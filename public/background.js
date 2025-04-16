@@ -50,7 +50,6 @@ const storage = {
 if (isExtensionEnvironment) {
     // 监听快捷键命令
     chrome.commands.onCommand.addListener(async (command) => {
-        console.log('Command received:', command);
         
         if (command === 'toggle-search') {
             try {
@@ -67,7 +66,6 @@ if (isExtensionEnvironment) {
                             target: { tabId: tab.id },
                             files: ['content-script.js']
                         });
-                        console.log('Script injection successful');
                     } catch (e) {
                         // 忽略已注入的错误
                         if (!e.message.includes('Cannot access contents of url')) {
