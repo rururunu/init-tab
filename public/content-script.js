@@ -1,4 +1,3 @@
-// 在文件开头添加环境检查
 const isExtensionEnvironment = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage;
 
 // 全局变量声明
@@ -189,6 +188,87 @@ function injectStyles() {
   font-size: 0.9em;
 }
 
+#bookmark-results {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  display: none;
+  max-height: 250px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* 自定义滚动条样式 */
+#bookmark-results::-webkit-scrollbar {
+  width: 8px; /* 滚动条宽度 */
+}
+
+#bookmark-results::-webkit-scrollbar-thumb {
+  background-color: transparent; /* 滚动条颜色 */
+}
+
+#bookmark-results::-webkit-scrollbar-track {
+  background: transparent; /* 滚动条轨道颜色 */
+}
+
+.bookmark-item {
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s;
+  color: #333;
+}
+
+.bookmark-item:hover {
+  transform: scale(1.02);
+}
+
+.bookmark-item.selected {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.bookmark-title {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.bookmark-url {
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
+}
+
+.bookmark-hint {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+
+.no-results {
+  padding: 12px;
+  text-align: center;
+  color: #666;
+}
+
+.more-results {
+  padding: 8px 12px;
+  text-align: center;
+  color: #666;
+  font-size: 12px;
+}
+
 @media (prefers-color-scheme: dark) {
   #global-search-box {
     background-color: rgba(30, 30, 30, 0.95);
@@ -200,7 +280,8 @@ function injectStyles() {
   }
   
   #search-status,
-  #search-engines-list {
+  #search-engines-list,
+  #bookmark-results {
     background: rgba(30, 30, 30, 0.95);
     color: #fff;
   }
@@ -210,6 +291,22 @@ function injectStyles() {
   }
   
   .engine-keys {
+    color: #999;
+  }
+
+  .bookmark-item:hover,
+  .bookmark-item.selected {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .bookmark-title {
+    color: #ffffff;
+  }
+  
+  .bookmark-url,
+  .bookmark-hint,
+  .no-results,
+  .more-results {
     color: #999;
   }
 }
@@ -223,6 +320,241 @@ if (document.readyState === 'loading') {
   injectStyles();
 }
 
+// 修改搜索收藏夹函数
+async function searchBookmarks(query) {
+  try {
+    const cached = await storage.get('cachedBookmarks');
+    if (!cached) return [];
+    
+    const bookmarks = JSON.parse(cached);
+    const lowerQuery = query.toLowerCase();
+    const isPinyinSearch = /^[a-zA-Z]+$/.test(query);
+
+    return bookmarks.filter(b => {
+      // 直接匹配逻辑
+      const directMatch = b.title?.toLowerCase().includes(lowerQuery) || 
+                         b.url?.toLowerCase().includes(lowerQuery);
+      if (directMatch) return true;
+
+      // 拼音匹配逻辑优化
+      if (isPinyinSearch && b.title) {
+        try {
+          const titleFirst = pinyin(b.title, {
+            style: pinyin.STYLE_FIRST_LETTER,
+            heteronym: false
+          }).flat().join('').toLowerCase();
+
+          const titleFull = pinyin(b.title, {
+            style: pinyin.STYLE_NORMAL,
+            heteronym: false
+          }).flat().join('').toLowerCase();
+
+          // 新增调试日志
+          console.log('[DEBUG] Bookmark:', 
+            'Title:', b.title,
+            'First:', titleFirst, 
+            'Full:', titleFull);
+
+          return titleFirst.includes(lowerQuery) || 
+                 titleFull.includes(lowerQuery) ||
+                 titleFull.replace(/'/g, '').includes(lowerQuery);
+        } catch(e) {
+          console.error('拼音处理错误:', e);
+          return false;
+        }
+      }
+      return false;
+    }).slice(0, 50);
+  } catch (e) {
+    console.error('搜索失败:', e);
+    return [];
+  }
+}
+
+// 创建搜索结果容器
+const createBookmarkResults = () => {
+  const container = document.createElement('div');
+  container.id = 'bookmark-results';
+  container.className = 'bookmark-results';
+  container.style.cssText = `
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 300px;
+    overflow-y: auto;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-top: 8px;
+    z-index: 1000;
+  `;
+  return container;
+};
+
+// 更新搜索结果
+const updateBookmarkResults = (results, selectedIndex = -1) => {
+  const container = document.getElementById('bookmark-results');
+  if (!container) return;
+
+  container.innerHTML = '';
+  
+  if (results.length === 0) {
+    const noResults = document.createElement('div');
+    noResults.className = 'no-results';
+    noResults.textContent = '未找到匹配的收藏夹';
+    container.appendChild(noResults);
+    return;
+  }
+
+  results.slice(0, 5).forEach((bookmark, index) => {
+    const item = document.createElement('div');
+    item.className = 'bookmark-item' + (index === selectedIndex ? ' selected' : '');
+    item.style.cssText = `
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: box-shadow 0.2s, background-color 0.2s, border 0.2s;
+      border: 2px solid transparent; // 默认边框透明
+    `;
+    
+    // 选中时的样式
+    if (index === selectedIndex) {
+      item.style.boxShadow = '0 0 10px rgba(4, 109, 223, 1)'; // 蓝色发光边框
+      item.style.border = '2px solid #046DDF'; // 选中时的边框颜色
+      item.style.backgroundColor = 'rgba(4, 109, 223, 0.1)'; // 选中时的背景色
+
+      // 添加提示
+      const hint = document.createElement('div');
+      hint.className = 'bookmark-hint';
+      hint.textContent = '按Enter打开';
+      hint.style.cssText = `
+        font-size: 12px;
+        color: #046DDF; // 使用边框颜色
+        margin-top: 4px;
+        font-weight: bold; // 加粗提示
+      `;
+      item.appendChild(hint);
+    }
+    
+    const content = document.createElement('div');
+    content.className = 'bookmark-content';
+    
+    const title = document.createElement('div');
+    title.className = 'bookmark-title';
+    title.textContent = bookmark.title;
+    title.style.cssText = `
+      font-weight: 500;
+      margin-bottom: 4px;
+    `;
+    
+    const url = document.createElement('div');
+    url.className = 'bookmark-url';
+    url.textContent = bookmark.url;
+    url.style.cssText = `
+      font-size: 12px;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+      display: block;
+    `;
+    
+    content.appendChild(title);
+    content.appendChild(url);
+    item.appendChild(content);
+    
+    item.addEventListener('click', () => {
+      if (bookmark.url) {
+        window.open(bookmark.url, '_blank', 'noopener,noreferrer');
+      }
+    });
+    
+    // 添加悬浮效果
+    item.addEventListener('mouseenter', () => {
+      item.style.boxShadow = '0 0 10px rgba(4, 109, 223, 1)'; // 悬浮时的发光边框
+      item.style.border = '2px solid #046DDF'; // 悬浮时的边框颜色
+    });
+
+    item.addEventListener('mouseleave', () => {
+      if (index !== selectedIndex) {
+        item.style.boxShadow = ''; // 恢复边框
+        item.style.border = '2px solid transparent'; // 恢复边框透明
+      }
+    });
+
+    container.appendChild(item);
+  });
+
+  if (results.length > 5) {
+    const more = document.createElement('div');
+    more.className = 'more-results';
+    more.textContent = `还有 ${results.length - 5} 个结果未显示`;
+    more.style.cssText = `
+      padding: 8px 12px;
+      text-align: center;
+      color: #666;
+      font-size: 12px;
+    `;
+    container.appendChild(more);
+  }
+};
+
+let selectedBookmarkIndex = -1;
+let currentBookmarkResults = [];
+
+const handleKeyNavigation = (e) => {
+  if (!document.getElementById('bookmark-results')?.style.display === 'block') return;
+
+  const maxIndex = Math.min(currentBookmarkResults.length - 1, 4);
+  
+  switch (e.key) {
+    case 'ArrowUp':
+      e.preventDefault();
+      if (selectedBookmarkIndex <= 0) {
+        selectedBookmarkIndex = maxIndex;
+      } else {
+        selectedBookmarkIndex--;
+      }
+      updateBookmarkResults(currentBookmarkResults, selectedBookmarkIndex);
+      scrollToSelected();
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      if (selectedBookmarkIndex >= maxIndex) {
+        selectedBookmarkIndex = 0;
+      } else {
+        selectedBookmarkIndex++;
+      }
+      updateBookmarkResults(currentBookmarkResults, selectedBookmarkIndex);
+      scrollToSelected();
+      break;
+    case 'Enter':
+      e.preventDefault();
+      if (selectedBookmarkIndex >= 0 && currentBookmarkResults[selectedBookmarkIndex]?.url) {
+        window.open(currentBookmarkResults[selectedBookmarkIndex].url, '_blank', 'noopener,noreferrer');
+      }
+      break;
+  }
+};
+
+const scrollToSelected = () => {
+  const container = document.getElementById('bookmark-results');
+  const selectedItem = container?.querySelector('.bookmark-item.selected');
+  
+  if (container && selectedItem) {
+    const containerRect = container.getBoundingClientRect();
+    const itemRect = selectedItem.getBoundingClientRect();
+    
+    if (itemRect.top < containerRect.top) {
+      container.scrollTop -= (containerRect.top - itemRect.top);
+    } else if (itemRect.bottom > containerRect.bottom) {
+      container.scrollTop += (itemRect.bottom - containerRect.bottom);
+    }
+  }
+};
+
+// 修改搜索框创建函数
 const createSearchContainer = () => {
   if (document.getElementById('global-search-extension')) {
     return document.getElementById('global-search-extension');
@@ -243,8 +575,17 @@ const createSearchContainer = () => {
   searchHint = document.createElement('div');
   searchHint.id = 'global-search-hint';
 
+  const bookmarkResults = createBookmarkResults();
+  const searchStatus = document.createElement('div');
+  searchStatus.id = 'search-status';
+  const enginesList = document.createElement('div');
+  enginesList.id = 'search-engines-list';
+
   searchBox.appendChild(searchHint);
   searchBox.appendChild(input);
+  searchBox.appendChild(bookmarkResults);
+  searchBox.appendChild(searchStatus);
+  searchBox.appendChild(enginesList);
   container.appendChild(searchBox);
 
   container.addEventListener('click', (e) => {
@@ -253,90 +594,73 @@ const createSearchContainer = () => {
     }
   });
 
-  const animateShow = () => {
-    container.style.display = 'flex';
-    container.offsetHeight;
-
-    container.classList.add('show');
-    searchBox.classList.add('show');
-    input.classList.add('show');
-    searchHint.classList.add('show');
-
-    setTimeout(() => {
-      input.focus();
-      input.select();
-    }, 50);
-  };
-
-  const animateHide = () => {
-    container.classList.remove('show');
-    searchBox.classList.remove('show');
-    input.classList.remove('show');
-    searchHint.classList.remove('show');
-
-    setTimeout(() => {
-      container.style.display = 'none';
-      input.value = '';
-    }, 300);
-  };
-
-  input.addEventListener('input', (e) => {
-    init();
+  // 修改输入事件监听
+  input.addEventListener('input', async (e) => {
     const value = e.target.value.trim();
-
-    // 当输入为空时，显示默认搜索引擎信息
-    if (!value) {
-      hideEnginesList();
-      const defaultEngine = jumpToData.get(defaultKey);
-      updateSearchStatus(`当前使用 ${defaultEngine.label} (${defaultEngine.key.join('/')}) | 输入 cd 切换搜索引擎`);
+    console.log('Input value:', value);
+    
+    // 重置搜索状态
+    selectedBookmarkIndex = -1;
+    currentBookmarkResults = [];
+    
+    // 处理收藏夹搜索
+    if (value.startsWith('*')) {
+      const searchQuery = value.slice(1).trim();
+      console.log('Searching bookmarks for:', searchQuery);
+      
+      if (searchQuery) {
+        try {
+          currentBookmarkResults = await searchBookmarks(searchQuery);
+          console.log('Found bookmarks:', currentBookmarkResults);
+          updateBookmarkResults(currentBookmarkResults);
+          updateSearchHint(`搜索收藏夹: ${searchQuery}`);
+          
+          const bookmarkResults = document.getElementById('bookmark-results');
+          if (bookmarkResults) {
+            bookmarkResults.style.display = 'block';
+          }
+        } catch (e) {
+          console.error('Error searching bookmarks:', e);
+          updateSearchHint('搜索收藏夹失败');
+        }
+      } else {
+        updateSearchHint('请输入要搜索的收藏夹内容');
+        const bookmarkResults = document.getElementById('bookmark-results');
+        if (bookmarkResults) {
+          bookmarkResults.style.display = 'none';
+        }
+      }
       return;
     }
 
+    // 处理搜索引擎切换
     if (value === 'cd') {
       showEnginesList();
-      updateSearchStatus('选择要切换的搜索引擎');
-    } else if (value.startsWith('cd ')) {
-      const engineKey = value.split(' ')[1];
-      const engine = jumpToData.get(engineKey);
-      if (engine) {
-        updateSearchStatus(`将切换到 ${engine.label} (${engine.key.join('/')})`);
-      } else {
-        updateSearchStatus('未找到匹配的搜索引擎');
-      }
-      showEnginesList();
-    } else {
-      // 检查输入是否匹配任何搜索引擎的 key
-      const inputParts = value.split(' ');
-      const searchKey = inputParts[0];
-
-      // 查找匹配的搜索引擎
-      let matchedEngine = null;
-      for (const [_, engine] of jumpToData) {
-        if (engine.key.includes(searchKey)) {
-          matchedEngine = engine;
-          break;
-        }
-      }
-
-      if (matchedEngine) {
-        // 如果找到匹配的搜索引擎
-        if (inputParts.length === 1) {
-          // 只输入了 key，还没有输入搜索内容
-          updateSearchStatus(`使用 ${matchedEngine.label} (${matchedEngine.key.join('/')}) | 输入搜索内容`);
-        } else {
-          // 已输入搜索内容
-          updateSearchStatus(`使用 ${matchedEngine.label} (${matchedEngine.key.join('/')}) 搜索`);
-        }
-      } else {
-        // 如果没有找到匹配的搜索引擎，使用默认搜索引擎
-        const defaultEngine = jumpToData.get(defaultKey);
-        updateSearchStatus(`使用默认引擎 ${defaultEngine.label} (${defaultEngine.key.join('/')}) 搜索`);
-      }
-      hideEnginesList();
+      updateSearchHint('请选择要切换的搜索引擎');
+      return;
     }
+
+    // 隐藏收藏夹搜索结果和搜索引擎列表
+    const bookmarkResults = document.getElementById('bookmark-results');
+    const enginesList = document.getElementById('search-engines-list');
+    if (bookmarkResults) bookmarkResults.style.display = 'none';
+    if (enginesList) enginesList.style.display = 'none';
+    
+    // 原有的搜索逻辑
+    init();
+    updateSearchHint(`使用默认引擎 ${jumpToData.get(defaultKey).label} 搜索 | 输入 cd 查看可用搜索引擎`);
   });
 
+  // 添加键盘事件监听
   input.addEventListener('keydown', (e) => {
+    if (e.target.value.trim().startsWith('*')) {
+      handleKeyNavigation(e);
+      if (e.key === 'Enter' && !currentBookmarkResults.length) {
+        e.preventDefault();
+      }
+      return;
+    }
+    
     if (e.key === 'Enter' && input.value.trim()) {
       const content = input.value.trim();
       if (content.startsWith("/")) {
@@ -358,17 +682,37 @@ const createSearchContainer = () => {
     }
   });
 
-  // 创建状态显示区域
-  const searchStatus = document.createElement('div');
-  searchStatus.id = 'search-status';
-  searchBox.appendChild(searchStatus);
-
-  // 创建搜索引擎列表
-  const enginesList = document.createElement('div');
-  enginesList.id = 'search-engines-list';
-  searchBox.appendChild(enginesList);
-
-  return { container, input, animateShow, animateHide };
+  return {
+    container,
+    input,
+    searchBox,
+    animateShow: () => {
+      container.style.display = 'flex';
+      container.offsetHeight;
+      container.classList.add('show');
+      searchBox.classList.add('show');
+      input.classList.add('show');
+      searchHint.classList.add('show');
+      setTimeout(() => {
+        input.focus();
+        input.select();
+      }, 50);
+    },
+    animateHide: () => {
+      container.classList.remove('show');
+      searchBox.classList.remove('show');
+      input.classList.remove('show');
+      searchHint.classList.remove('show');
+      setTimeout(() => {
+        container.style.display = 'none';
+        input.value = '';
+        const bookmarkResults = document.getElementById('bookmark-results');
+        const enginesList = document.getElementById('search-engines-list');
+        if (bookmarkResults) bookmarkResults.style.display = 'none';
+        if (enginesList) enginesList.style.display = 'none';
+      }, 300);
+    }
+  };
 };
 
 const showSearchBox = () => {
@@ -403,7 +747,7 @@ const showSearchBox = () => {
       // 清空输入框并显示默认搜索引擎信息
       input.value = '';
       const defaultEngine = jumpToData.get(defaultKey);
-      updateSearchStatus(`当前使用 ${defaultEngine.label} (${defaultEngine.key.join('/')}) | 输入 cd 切换搜索引擎`);
+      updateSearchStatus(`当前使用 ${defaultEngine.label} (${defaultEngine.key.join('/')}) | 输入 cd 查看可用搜索引擎`);
       hideEnginesList();
     }
   }
@@ -554,19 +898,31 @@ function showEnginesList() {
   if (!enginesList) return;
 
   enginesList.innerHTML = '';
-  enginesList.classList.add('show');
+  enginesList.style.display = 'block';
 
-  // 按搜索引擎分组显示，而不是按键显示
+  // 按搜索引擎分组显示
   jumpData.forEach(engine => {
     const item = document.createElement('div');
     item.className = 'engine-item';
+    item.style.cssText = `
+      padding: 10px 16px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.05);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #000000 !important;
+    `;
 
     const engineInfo = document.createElement('div');
     engineInfo.textContent = engine.label;
 
     const engineKeys = document.createElement('div');
     engineKeys.className = 'engine-keys';
-    engineKeys.textContent = engine.key.join(' / '); // 用 / 分隔多个 key
+    engineKeys.textContent = engine.key.join(' / ');
 
     item.appendChild(engineInfo);
     item.appendChild(engineKeys);
@@ -574,7 +930,7 @@ function showEnginesList() {
     item.addEventListener('click', () => {
       const input = document.getElementById('global-search-input');
       if (input) {
-        input.value = `cd ${engine.key[0]}`; // 使用第一个 key
+        input.value = `cd ${engine.key[0]}`;
         input.focus();
         updateSearchStatus(`将切换到 ${engine.label} (${engine.key.join('/')})`);
       }
@@ -584,11 +940,11 @@ function showEnginesList() {
   });
 }
 
-// 添加隐藏搜索引擎列表函数
+// 修改隐藏搜索引擎列表函数
 function hideEnginesList() {
   const enginesList = document.getElementById('search-engines-list');
   if (enginesList) {
-    enginesList.classList.remove('show');
+    enginesList.style.display = 'none';
   }
 }
 

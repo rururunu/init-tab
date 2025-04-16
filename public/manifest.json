@@ -17,7 +17,8 @@
     "scripting",
     "storage",
     "unlimitedStorage",
-    "commands"
+    "commands",
+    "bookmarks"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -28,6 +29,7 @@
         "<all_urls>"
       ],
       "js": [
+        "pinyin.js",
         "content-script.js"
       ],
       "css": [

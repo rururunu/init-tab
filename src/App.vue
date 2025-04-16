@@ -7,16 +7,15 @@ import Dialog from './components/ui/dialog/Dialog.vue';
 import { Icon } from "@iconify/vue";
 import NotificationContainer from './components/ui/notification/NotificationContainer.vue'
 
-import { onBeforeUnmount, onMounted, ref, computed, watch, nextTick } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue';
 import dayjs from "dayjs";
-// import { useColorMode } from "@vueuse/core";
-// import { computed } from "vue";
 import { shallowRef } from 'vue'
 import BackgroundSettings from '@/components/settings/BackgroundSettings.vue'
 import SearchEngineSettings from '@/components/settings/SearchEngineSettings.vue'
 import TutorialSettings from '@/components/settings/TutorialSettings.vue'
 import { useWallpaper } from './composables/useWallpaper';
 import { storage } from '@/utils/storage';
+import pinyin from 'pinyin';
 
 
 type JumpData = {
@@ -68,6 +67,9 @@ declare global {
           };
         };
       };
+      bookmarks?: {
+        search: (query: string) => Promise<chrome.bookmarks.BookmarkTreeNode[]>;
+      };
     };
   }
 }
@@ -106,7 +108,7 @@ const currentSettingComponent = shallowRef<any>(null)
 
 let timer: number;
 
-const { wallpaperType, wallpaperUrl, loadState } = useWallpaper();
+const { wallpaperType, wallpaperUrl, loadState, showMask } = useWallpaper();
 
 // 添加搜索状态文本
 const searchStatusText = ref<string>('');
@@ -114,20 +116,42 @@ const searchStatusText = ref<string>('');
 const showEngineSelector = ref<boolean>(false);
 // 用于获取输入框引用
 const vanishingInputRef = ref(null);
+// 收藏夹搜索结果
+const bookmarkResults = ref<chrome.bookmarks.BookmarkTreeNode[]>([]);
+// 是否显示收藏夹搜索结果
+const showBookmarkResults = ref<boolean>(false);
+// 当前选中的结果索引
+const selectedBookmarkIndex = ref<number>(-1);
 
 // 监听输入变化
 watch(ide, (newValue) => {
   init();
   const value = newValue.trim();
-  
+
   // 重置搜索引擎选择器显示状态
   showEngineSelector.value = false;
+  showBookmarkResults.value = false;
+  selectedBookmarkIndex.value = -1;
 
   if (!value) {
     // 当输入为空时，显示默认搜索引擎信息
     const defaultEngine = jumpToData.value?.get(defaultKey.value);
     if (defaultEngine) {
       searchStatusText.value = `当前使用 ${defaultEngine.label} (${defaultEngine.key.join('/')}) | 输入 cd 切换搜索引擎`;
+    }
+    return;
+  }
+
+  // 处理收藏夹搜索
+  if (value.startsWith('*')) {
+    const searchQuery = value.slice(1).trim();
+    if (searchQuery) {
+      searchBookmarks(searchQuery);
+      showBookmarkResults.value = true;
+      searchStatusText.value = `搜索收藏夹: ${searchQuery}`;
+    } else {
+      searchStatusText.value = '请输入要搜索的收藏夹内容';
+      showBookmarkResults.value = false;
     }
     return;
   }
@@ -183,34 +207,98 @@ const selectEngine = (key: string) => {
 
 // 加载搜索引擎数据
 const loadEngines = async () => {
-    try {
-        const savedEngines = await storage.get('jumpData');
-        if (savedEngines && Array.isArray(savedEngines)) {
-            jumpData.value = savedEngines;
-        } else {
-            jumpData.value = [...defaultJumpData];
-        }
-    } catch (e) {
-        console.error('Failed to load engines:', e);
-        jumpData.value = [...defaultJumpData];
+  try {
+    const savedEngines = await storage.get('jumpData');
+    if (savedEngines && Array.isArray(savedEngines)) {
+      jumpData.value = savedEngines;
+    } else {
+      jumpData.value = [...defaultJumpData];
     }
+  } catch (e) {
+    console.error('Failed to load engines:', e);
+    jumpData.value = [...defaultJumpData];
+  }
 };
 
 // 监听 storage 变化
 if (typeof window.chrome !== 'undefined' && window.chrome.storage?.local?.onChanged) {
-    window.chrome.storage.local.onChanged.addListener((changes, namespace) => {
-        if (namespace === 'local' && changes.jumpData) {
-            console.log('changes.jumpData', changes.jumpData);
-            const newValue = changes.jumpData.newValue;
-            if (newValue && Array.isArray(newValue)) {
-                // jumpData.value = newValue;
-            }
-        }
-    });
+  window.chrome.storage.local.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local' && changes.jumpData) {
+      console.log('changes.jumpData', changes.jumpData);
+      const newValue = changes.jumpData.newValue;
+      if (newValue && Array.isArray(newValue)) {
+        // jumpData.value = newValue;
+      }
+    }
+  });
 }
+
+// 监听键盘事件
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (!showBookmarkResults.value) return;
+
+  const maxIndex = Math.min(bookmarkResults.value.length - 1, 4);
+
+  switch (e.key) {
+    case 'ArrowUp':
+      e.preventDefault();
+      if (selectedBookmarkIndex.value <= 0) {
+        selectedBookmarkIndex.value = maxIndex;
+      } else {
+        selectedBookmarkIndex.value--;
+      }
+      scrollToSelectedItem();
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      if (selectedBookmarkIndex.value >= maxIndex) {
+        selectedBookmarkIndex.value = 0;
+      } else {
+        selectedBookmarkIndex.value++;
+      }
+      scrollToSelectedItem();
+      break;
+    case 'Enter':
+      e.preventDefault();
+      if (selectedBookmarkIndex.value >= 0 && bookmarkResults.value[selectedBookmarkIndex.value]?.url) {
+        openBookmark(bookmarkResults.value[selectedBookmarkIndex.value].url);
+      }
+      break;
+  }
+};
+
+// 滚动到选中的项目
+const scrollToSelectedItem = () => {
+  nextTick(() => {
+    const container = document.querySelector('.bookmark-results .overflow-y-auto');
+    const selectedItem = document.querySelector(`.bookmark-item:nth-child(${selectedBookmarkIndex.value + 1})`);
+
+    if (container && selectedItem) {
+      const containerRect = container.getBoundingClientRect();
+      const itemRect = selectedItem.getBoundingClientRect();
+
+      // 如果选中的项目在可视区域之外
+      if (itemRect.top < containerRect.top) {
+        // 向上滚动
+        container.scrollTop -= (containerRect.top - itemRect.top);
+      } else if (itemRect.bottom > containerRect.bottom) {
+        // 向下滚动
+        container.scrollTop += (itemRect.bottom - containerRect.bottom);
+      }
+    }
+  });
+};
 
 // 组件挂载时加载数据
 onMounted(async () => {
+  try {
+    // 新增书签缓存逻辑
+    if (window.chrome?.bookmarks) {
+      const allBookmarks = await window.chrome.bookmarks.search({});
+      const validBookmarks = allBookmarks.filter(b => b.url);
+      await storage.set('cachedBookmarks', JSON.stringify(validBookmarks));
+    }
+
     await loadEngines();
     await loadState();
     await init();
@@ -221,11 +309,31 @@ onMounted(async () => {
     // 设置初始搜索状态
     const defaultEngine = jumpToData.value?.get(defaultKey.value);
     if (defaultEngine) {
-        searchStatusText.value = `当前使用 ${defaultEngine.label} (${defaultEngine.key.join('/')}) | 输入 cd 切换搜索引擎`;
+      searchStatusText.value = `当前使用 ${defaultEngine.label} (${defaultEngine.key.join('/')}) | 输入 cd 切换搜索引擎`;
     }
+
+    // 从存储中加载壁纸类型和URL
+    const savedWallpaperType = await storage.get('wallpaperType');
+    const savedWallpaperUrl = await storage.get('wallpaperUrl');
+
+    if (savedWallpaperType && savedWallpaperUrl) {
+      // 如果存储中有壁纸信息，使用存储的值
+      wallpaperType.value = savedWallpaperType as 'none' | 'source' | 'custom';
+      if (wallpaperType.value !== 'none') {
+        wallpaperUrl.value = savedWallpaperUrl as string;
+      }
+    }
+
+    // 组件挂载时添加键盘事件监听
+    window.addEventListener('keydown', handleKeyDown);
+  } catch (e) {
+    console.error('Failed to load initial state:', e);
+  }
 });
 onBeforeUnmount(() => {
   window.clearInterval(timer);
+  // 组件卸载时移除键盘事件监听
+  window.removeEventListener('keydown', handleKeyDown);
 })
 
 const init = async () => {
@@ -241,11 +349,11 @@ const init = async () => {
     defaultKey.value = (savedDefaultKey || 'bd') as string;
     jumpData.value = JSON.parse(savedJumpData as string || JSON.stringify(defaultJumpData));
 
-    if(!savedDefaultKey){
+    if (!savedDefaultKey) {
       await storage.set('defaultKey', 'bd');
     }
 
-    if(!savedJumpData){
+    if (!savedJumpData) {
       await storage.set('jumpData', JSON.stringify(defaultJumpData));
     }
 
@@ -268,6 +376,11 @@ const updateDateTime = () => {
 }
 
 function submit(content: string) {
+  // 如果输入以*开头，不执行搜索
+  if (content.startsWith("*")) {
+    return;
+  }
+
   if (content.startsWith("/")) {
     jumpTo(defaultKey.value, content.slice(1));
   }
@@ -321,6 +434,61 @@ function setUpClick(select: string) {
   currentSettingComponent.value = selected?.in || null
 }
 
+// 搜索收藏夹
+const searchBookmarks = async (query: string) => {
+  try {
+    if (window.chrome?.bookmarks) {
+      const results = await window.chrome.bookmarks.search(query);
+      // 过滤掉文件夹，只显示书签
+      const bookmarks = results.filter((item: chrome.bookmarks.BookmarkTreeNode) => item.url);
+
+      // 如果查询是纯字母，尝试匹配拼音首字母和完整拼音
+      if (/^[a-zA-Z]+$/.test(query)) {
+        const pinyinResults = bookmarks.filter(bookmark => {
+          // 修复点1：使用正确的拼音样式参数
+          // 修复点2：添加扁平化处理(flat)
+          const titleFirst = pinyin(bookmark.title, {
+            style: pinyin.STYLE_FIRST_LETTER,  // 首字母风格
+            heteronym: false
+          }).flat().join('').toLowerCase();
+
+          const titleFull = pinyin(bookmark.title, {
+            style: pinyin.STYLE_NORMAL,  // 完整拼音风格
+            heteronym: false
+          }).flat().join('').toLowerCase();
+
+          // 新增调试日志
+          console.log('Title:', bookmark.title, 
+                     'First:', titleFirst, 
+                     'Full:', titleFull);
+
+          return titleFirst.includes(query.toLowerCase()) || 
+                 titleFull.includes(query.toLowerCase());
+        });
+
+        // 如果有拼音匹配的结果，优先显示
+        if (pinyinResults.length > 0) {
+          bookmarkResults.value = pinyinResults;
+          return;
+        }
+      }
+
+      // 如果没有拼音匹配的结果，显示原始搜索结果
+      bookmarkResults.value = bookmarks;
+    }
+  } catch (e) {
+    console.error('搜索收藏夹失败:', e);
+    searchStatusText.value = '搜索收藏夹失败';
+  }
+};
+
+// 打开收藏夹链接
+const openBookmark = (url: string | undefined) => {
+  if (url) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+};
+
 </script>
 
 <template>
@@ -333,8 +501,8 @@ function setUpClick(select: string) {
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat'
       } : {}">
-        <!-- 遮罩层移到这里 -->
-        <div v-if="wallpaperType !== 'none'" id="mask"></div>
+        <!-- 保留遮罩层 -->
+        <div v-if="wallpaperType !== 'none' && showMask" id="mask"></div>
 
         <div id="setup" class="flex items-center gap-4 z-[200]">
           <Icon @click="onSetup" icon="line-md:cog-filled"
@@ -348,7 +516,8 @@ function setUpClick(select: string) {
             :class="{ '!text-white dark:!text-neutral-800': wallpaperType !== 'none' }">
             {{ time }}
           </h2>
-          <div class="mb-30 text-center text-5xl font-bold text-slate-700 dark:text-zinc-400 sm:mb-50 select-none cursor-none"
+          <div
+            class="mb-30 text-center text-5xl font-bold text-slate-700 dark:text-zinc-400 sm:mb-50 select-none cursor-none"
             :class="{ '!text-white dark:!text-neutral-800': wallpaperType !== 'none' }">
             {{ date }}
           </div>
@@ -356,34 +525,26 @@ function setUpClick(select: string) {
 
 
         <!-- 搜索框 -->
-        <VanishingInput id="vanishing-input" v-model="ide" :placeholders="placeholderArray" @submit="submit" ref="vanishingInputRef" />
-        
+        <VanishingInput id="vanishing-input" v-model="ide" :placeholders="placeholderArray" @submit="submit"
+          ref="vanishingInputRef" />
+
         <!-- 搜索状态提示框 -->
-        <Transition
-          enter-active-class="transition duration-200 ease-out"
-          enter-from-class="transform translate-y-2 opacity-0"
-          enter-to-class="transform translate-y-0 opacity-100"
-          leave-active-class="transition duration-150 ease-in"
-          leave-from-class="transform translate-y-0 opacity-100"
-          leave-to-class="transform translate-y-2 opacity-0"
-        >
-          <div v-if="searchStatusText" 
-            class="input-group mx-auto max-w-xl w-full mt-2 px-4 py-2 rounded-lg text-sm text-center backdrop-blur-md
+        <Transition enter-active-class="transition duration-200 ease-out"
+          enter-from-class="transform translate-y-2 opacity-0" enter-to-class="transform translate-y-0 opacity-100"
+          leave-active-class="transition duration-150 ease-in" leave-from-class="transform translate-y-0 opacity-100"
+          leave-to-class="transform translate-y-2 opacity-0">
+          <div v-if="searchStatusText" class="input-group mx-auto max-w-xl w-full mt-2 px-4 py-2 rounded-lg text-sm text-center backdrop-blur-md
             bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-white
             border border-gray-200 dark:border-gray-700 shadow-lg">
             {{ searchStatusText }}
           </div>
         </Transition>
-        
+
         <!-- 搜索引擎选择器 -->
-        <Transition
-          enter-active-class="transition duration-300 ease-out"
-          enter-from-class="transform scale-95 opacity-0"
-          enter-to-class="transform scale-100 opacity-100"
-          leave-active-class="transition duration-200 ease-in"
-          leave-from-class="transform scale-100 opacity-100"
-          leave-to-class="transform scale-95 opacity-0"
-        >
+        <Transition enter-active-class="transition duration-300 ease-out"
+          enter-from-class="transform scale-95 opacity-0" enter-to-class="transform scale-100 opacity-100"
+          leave-active-class="transition duration-200 ease-in" leave-from-class="transform scale-100 opacity-100"
+          leave-to-class="transform scale-95 opacity-0">
           <div v-if="showEngineSelector" class="engine-selector mx-auto max-w-3xl w-full mt-4 rounded-xl 
             backdrop-blur-md bg-white/90 dark:bg-gray-800/90 
             border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden">
@@ -393,10 +554,8 @@ function setUpClick(select: string) {
             </div>
             <div class="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               <div v-for="(engine, index) in [...new Set(Array.from(jumpToData?.values() || []).map(e => e.label))]
-                .map(label => Array.from(jumpToData?.values() || []).find(e => e.label === label))"
-                :key="index"
-                @click="engine && selectEngine(engine.key[0])"
-                class="engine-item relative flex items-center p-3 rounded-lg cursor-pointer transition-all duration-150
+                .map(label => Array.from(jumpToData?.values() || []).find(e => e.label === label))" :key="index"
+                @click="engine && selectEngine(engine.key[0])" class="engine-item relative flex items-center p-3 rounded-lg cursor-pointer transition-all duration-150
                   hover:bg-gray-100 dark:hover:bg-gray-700
                   border border-gray-200 dark:border-gray-600"
                 :class="{ 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-600': engine && defaultKey === engine.key[0] }">
@@ -406,10 +565,50 @@ function setUpClick(select: string) {
                     关键词: {{ engine?.key.join(', ') }}
                   </div>
                 </div>
-                <div v-if="engine && defaultKey === engine.key[0]" 
+                <div v-if="engine && defaultKey === engine.key[0]"
                   class="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
                   当前默认
                 </div>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <!-- 收藏夹搜索结果 -->
+        <Transition enter-active-class="transition duration-300 ease-out"
+          enter-from-class="transform scale-95 opacity-0" enter-to-class="transform scale-100 opacity-100"
+          leave-active-class="transition duration-200 ease-in" leave-from-class="transform scale-100 opacity-100"
+          leave-to-class="transform scale-95 opacity-0">
+          <div v-if="showBookmarkResults" class="bookmark-results mx-auto max-w-3xl w-full mt-4 rounded-xl 
+            backdrop-blur-md bg-white/90 dark:bg-gray-800/90 
+            border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden">
+            <div class="p-2 bg-gray-100/90 dark:bg-gray-700/90 border-b border-gray-200 dark:border-gray-600">
+              <h3 class="font-medium text-gray-800 dark:text-white text-sm">收藏夹搜索结果</h3>
+            </div>
+            <div class="p-2 space-y-1 max-h-[200px] overflow-y-auto" ref="bookmarkResultsContainer">
+              <div v-for="(bookmark, index) in bookmarkResults.slice(0, 5)" :key="index"
+                @click="openBookmark(bookmark.url)" class="bookmark-item p-2 rounded-lg cursor-pointer transition-all duration-150
+                  hover:bg-gray-100 dark:hover:bg-gray-700
+                  border border-gray-200 dark:border-gray-600" :class="{
+                    'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-600 ring-2 ring-blue-500 dark:ring-blue-400':
+                      index === selectedBookmarkIndex
+                  }">
+                <div class="flex items-center gap-2">
+                  <div class="flex-grow min-w-0">
+                    <div class="font-medium text-gray-800 dark:text-white text-sm truncate">{{ bookmark.title }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ bookmark.url }}</div>
+                  </div>
+                  <div v-if="index === selectedBookmarkIndex" class="text-xs text-blue-500 dark:text-blue-400">
+                    按Enter打开
+                  </div>
+                </div>
+              </div>
+              <div v-if="bookmarkResults.length === 0"
+                class="text-center text-gray-500 dark:text-gray-400 py-2 text-sm">
+                未找到匹配的收藏夹
+              </div>
+              <div v-if="bookmarkResults.length > 5" class="text-center text-gray-500 dark:text-gray-400 py-1 text-xs">
+                还有 {{ bookmarkResults.length - 5 }} 个结果未显示
               </div>
             </div>
           </div>
@@ -461,8 +660,7 @@ function setUpClick(select: string) {
   width: 100vw;
   height: 100vh;
   z-index: 1;
-  background-color: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(2px);
+  background-color: rgba(0, 0, 0, 0.15);
 }
 
 .p-8,
@@ -545,6 +743,50 @@ function setUpClick(select: string) {
 /* 确保输入组与搜索框保持一致的层级 */
 .input-group {
   position: relative;
-  z-index: 2; /* 与搜索框保持相同的z-index */
+  z-index: 2;
+  /* 与搜索框保持相同的z-index */
+}
+
+/* 收藏夹搜索结果样式 */
+.bookmark-item {
+  transition: all 0.15s ease;
+  padding: 0.5rem;
+}
+
+.bookmark-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* 选中状态样式 */
+.bookmark-item[class*="bg-blue-50"] {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* 自定义滚动条样式 */
+.bookmark-results {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.bookmark-results::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.bookmark-results::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 2px;
+}
+
+.bookmark-results::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+  transition: background-color 0.2s ease;
+}
+
+.bookmark-results::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
 }
 </style>

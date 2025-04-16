@@ -1,10 +1,11 @@
 <template>
     <label class="relative flex items-center cursor-pointer">
         <input 
-            type="radio"
+            :type="type"
             :name="name"
+            :value="value"
             :checked="checked"
-            @change="$emit('update:modelValue', value)"
+            @change="handleChange"
             class="absolute opacity-0 w-0 h-0"
         />
         <div 
@@ -40,13 +41,23 @@
 
 <script setup lang="ts">
 defineProps<{
-    modelValue: string
-    value: string
-    name: string
+    type?: 'radio' | 'checkbox'
+    name?: string
+    value?: string
     checked: boolean
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
     'update:modelValue': [value: string]
+    'update:checked': [value: boolean]
 }>();
+
+const handleChange = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    if (target.type === 'radio') {
+        emit('update:modelValue', target.value);
+    } else {
+        emit('update:checked', target.checked);
+    }
+};
 </script> 

@@ -16,6 +16,8 @@ const DEFAULT_SOURCE_URL = 'https://picsum.photos/1920/1080';
 const wallpaperType = ref<BackgroundType>('none');
 const wallpaperUrl = ref<string>('');
 const sourceUrl = ref<string>(DEFAULT_SOURCE_URL);
+const showMask = ref<boolean>(true); // 添加蒙版显示状态
+const historyList = ref<Array<{ url: string; timestamp: number }>>([]);
 
 export function useWallpaper() {
     // 加载壁纸状态
@@ -25,12 +27,16 @@ export function useWallpaper() {
             let storedType: BackgroundType | null = null;
             let storedUrl: string | null = null;
             let storedSourceUrl: string | null = null;
+            let storedShowMask: boolean | null = null;
+            let storedHistory: Array<{ url: string; timestamp: number }> | null = null;
 
             if (chrome?.storage?.local) {
-                const chromeData = await chrome.storage.local.get(['wallpaperType', 'wallpaperUrl', 'sourceUrl']);
+                const chromeData = await chrome.storage.local.get(['wallpaperType', 'wallpaperUrl', 'sourceUrl', 'showMask', 'wallpaperHistory']);
                 storedType = chromeData.wallpaperType || null;
                 storedUrl = chromeData.wallpaperUrl || null;
                 storedSourceUrl = chromeData.sourceUrl || null;
+                storedShowMask = chromeData.showMask ?? true;
+                storedHistory = chromeData.wallpaperHistory || null;
             }
 
             // 如果 chrome.storage.local 没有值，从 localStorage 获取
@@ -43,43 +49,52 @@ export function useWallpaper() {
             if (!storedSourceUrl) {
                 storedSourceUrl = localStorage.getItem('sourceUrl') || '';
             }
+            if (storedShowMask === null) {
+                storedShowMask = localStorage.getItem('showMask') === 'false' ? false : true;
+            }
+            if (storedHistory === null) {
+                storedHistory = JSON.parse(localStorage.getItem('wallpaperHistory') || '[]');
+            }
 
             // 更新响应式状态
             wallpaperType.value = storedType;
             wallpaperUrl.value = storedUrl;
-            // 确保sourceUrl不为空，使用默认值
             sourceUrl.value = storedSourceUrl || DEFAULT_SOURCE_URL;
+            showMask.value = storedShowMask;
+            historyList.value = storedHistory;
 
         } catch (error) {
             console.error('Failed to load wallpaper state:', error);
-            // 如果出错，使用默认值
             wallpaperType.value = 'none';
             wallpaperUrl.value = '';
             sourceUrl.value = DEFAULT_SOURCE_URL;
+            showMask.value = true;
+            historyList.value = [];
         }
     };
 
     // 保存壁纸状态
     const saveState = async () => {
         try {
-            // 确保sourceUrl不为空
             if (!sourceUrl.value) {
                 sourceUrl.value = DEFAULT_SOURCE_URL;
             }
             
-            // 同时保存到 chrome.storage.local 和 localStorage
             if (chrome?.storage?.local) {
                 await chrome.storage.local.set({
                     wallpaperType: wallpaperType.value,
                     wallpaperUrl: wallpaperUrl.value,
-                    sourceUrl: sourceUrl.value
+                    sourceUrl: sourceUrl.value,
+                    showMask: showMask.value,
+                    wallpaperHistory: historyList.value
                 });
             }
 
-            // 作为备份也保存到 localStorage
             localStorage.setItem('wallpaperType', wallpaperType.value);
             localStorage.setItem('wallpaperUrl', wallpaperUrl.value);
             localStorage.setItem('sourceUrl', sourceUrl.value);
+            localStorage.setItem('showMask', showMask.value.toString());
+            localStorage.setItem('wallpaperHistory', JSON.stringify(historyList.value));
         } catch (error) {
             console.error('Failed to save wallpaper state:', error);
         }
@@ -88,17 +103,77 @@ export function useWallpaper() {
     // 更新壁纸
     const updateWallpaper = async (type: BackgroundType, url: string = '') => {
         wallpaperType.value = type;
-        if (type === 'custom' || type === 'source') {
-            if (type === 'source' && !url) {
-                // 如果是源类型但URL为空，使用当前的sourceUrl
-                wallpaperUrl.value = sourceUrl.value || DEFAULT_SOURCE_URL;
-            } else {
-                wallpaperUrl.value = url;
-            }
-        } else {
-            wallpaperUrl.value = '';
+        wallpaperUrl.value = url; // 直接使用传入的URL
+        
+        // 保存到存储
+        if (chrome?.storage?.local) {
+            await chrome.storage.local.set({
+                wallpaperType: type,
+                wallpaperUrl: url
+            });
         }
+        
+        localStorage.setItem('wallpaperType', type);
+        localStorage.setItem('wallpaperUrl', url);
+        
+        // 添加到历史记录
+        if (type === 'custom') {
+            addToHistory(url);
+        }
+        
         await saveState();
+    };
+
+    // 添加到历史记录
+    const addToHistory = (url: string) => {
+        // 检查是否已存在
+        const existingIndex = historyList.value.findIndex(item => item.url === url);
+        if (existingIndex !== -1) {
+            // 如果存在，更新时间戳
+            historyList.value[existingIndex].timestamp = Date.now();
+        } else {
+            // 如果不存在，添加到开头
+            historyList.value.unshift({
+                url,
+                timestamp: Date.now()
+            });
+        }
+        // 限制历史记录数量为10条
+        if (historyList.value.length > 10) {
+            historyList.value = historyList.value.slice(0, 10);
+        }
+        saveState();
+    };
+
+    // 从历史记录中删除
+    const removeFromHistory = (url: string) => {
+        historyList.value = historyList.value.filter(item => item.url !== url);
+        saveState();
+    };
+
+    // 从历史记录切换壁纸
+    const switchFromHistory = async (url: string) => {
+        try {
+            // 更新壁纸类型和URL
+            wallpaperType.value = 'custom';
+            wallpaperUrl.value = url;
+            
+            // 保存到存储
+            if (chrome?.storage?.local) {
+                await chrome.storage.local.set({
+                    wallpaperType: 'custom',
+                    wallpaperUrl: url
+                });
+            }
+            
+            localStorage.setItem('wallpaperType', 'custom');
+            localStorage.setItem('wallpaperUrl', url);
+            
+            // 保存状态
+            await saveState();
+        } catch (e) {
+            console.error('切换历史壁纸失败:', e);
+        }
     };
 
     // 更新壁纸源
@@ -136,6 +211,12 @@ export function useWallpaper() {
         await storage.remove('wallpaperState');
     };
 
+    // 添加切换蒙版显示的方法
+    const toggleMask = async (show: boolean) => {
+        showMask.value = show;
+        await saveState();
+    };
+
     // 组件挂载时自动加载状态
     onMounted(() => {
         loadState();
@@ -145,11 +226,16 @@ export function useWallpaper() {
         wallpaperType,
         wallpaperUrl,
         sourceUrl,
+        showMask,
+        historyList,
         updateWallpaper,
         updateSourceUrl,
         getWallpaperStyle,
         clearWallpaper,
         loadState,
         saveState,
+        toggleMask,
+        removeFromHistory,
+        switchFromHistory
     };
 } 
