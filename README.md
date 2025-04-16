@@ -41,6 +41,10 @@
 
 * cd bd 将百度设置为默认搜索引擎
 
+##### 搜索书签(收藏)
+* 输入 * 后面加上标题或网址即可 如 搜索 deepseek 输入 *de 即可选择
+![PixPin_2025-04-16_23-22-39](https://github.com/user-attachments/assets/8b24455b-2885-42d3-b39a-d0fd768f4425)
+
 ##### 快捷键
 
 * Alt + S 打开全局搜索框
