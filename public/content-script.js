@@ -194,13 +194,15 @@ function injectStyles() {
   left: 0;
   right: 0;
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   display: none;
-  max-height: 250px;
-  overflow: hidden;
+  max-height: 300px;
+  overflow-y: auto;
   transition: all 0.3s ease;
+  z-index: 1000;
+  margin-top: 8px;
 }
 
 /* 自定义滚动条样式 */
@@ -218,13 +220,15 @@ function injectStyles() {
 
 .bookmark-item {
   background: white;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 2px solid transparent;
   border-radius: 8px;
   padding: 12px;
   margin: 8px 0;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s, border 0.2;
   color: #333;
+  padding: 8px 12px;
+  cursor: pointer;
 }
 
 .bookmark-item:hover {
@@ -294,6 +298,11 @@ function injectStyles() {
     color: #999;
   }
 
+  .bookmark-item {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #999;
+  }
+
   .bookmark-item:hover,
   .bookmark-item.selected {
     background-color: rgba(255, 255, 255, 0.1);
@@ -344,19 +353,19 @@ const createBookmarkResults = () => {
   const container = document.createElement('div');
   container.id = 'bookmark-results';
   container.className = 'bookmark-results';
-  container.style.cssText = `
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    max-height: 300px;
-    overflow-y: auto;
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    margin-top: 8px;
-    z-index: 1000;
-  `;
+  // container.style.cssText = `
+  //   position: absolute;
+  //   top: 100%;
+  //   left: 0;
+  //   right: 0;
+  //   max-height: 300px;
+  //   overflow-y: auto;
+  //   background: rgba(255, 255, 255, 0.95);
+  //   border-radius: 8px;
+  //   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  //   margin-top: 8px;
+  //   z-index: 1000;
+  // `;
   return container;
 };
 
@@ -378,12 +387,12 @@ const updateBookmarkResults = (results, selectedIndex = -1) => {
   results.slice(0, 5).forEach((bookmark, index) => {
     const item = document.createElement('div');
     item.className = 'bookmark-item' + (index === selectedIndex ? ' selected' : '');
-    item.style.cssText = `
-      padding: 8px 12px;
-      cursor: pointer;
-      transition: box-shadow 0.2s, background-color 0.2s, border 0.2s;
-      border: 2px solid transparent; // 默认边框透明
-    `;
+    // item.style.cssText = `
+    //   padding: 8px 12px;
+    //   cursor: pointer;
+    //   transition: box-shadow 0.2s, background-color 0.2s, border 0.2s;
+    //   border: 2px solid transparent; // 默认边框透明
+    // `;
 
     // 选中时的样式
     if (index === selectedIndex) {
@@ -880,6 +889,7 @@ function showEnginesList() {
     `;
 
     const engineInfo = document.createElement('div');
+    engineInfo.className = 'engine-keys'
     engineInfo.textContent = engine.label;
 
     const engineKeys = document.createElement('div');
