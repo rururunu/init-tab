@@ -10,9 +10,10 @@
     ]" />
 
     <!-- Text Input -->
-    <input ref="inputRef" v-model="vanishingText" :disabled="animating" type="text"
+    <input ref="inputRef" :disabled="animating" type="text"
       class="relative z-50 size-full rounded-full border-none bg-transparent pl-4 pr-20 text-sm text-black focus:outline-none focus:ring-0 sm:pl-10 sm:text-base dark:text-white"
-      :class="{ 'text-transparent dark:text-transparent': animating }" @keydown.enter="handleKeyDown" />
+      :class="{ 'text-transparent dark:text-transparent': animating }" @keydown.enter="handleKeyDown"
+      :value="vanishingText" @input="vanishingInput" />
 
     <!-- Submit Button -->
     <button :disabled="!vanishingText" type="submit"
@@ -206,6 +207,10 @@ function vanishAndSubmit(): void {
 
 function handleSubmit(): void {
   vanishAndSubmit();
+}
+
+function vanishingInput(e: any): void {
+  vanishingText.value = e.target.value
 }
 
 // Watch for value changes
