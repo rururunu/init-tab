@@ -46,6 +46,46 @@
         </div>
       </div>
 
+      <!-- 搜索建议操作 -->
+      <div class="tutorial-section">
+        <h3 class="text-xl font-semibold mb-2">搜索建议操作</h3>
+        <div class="space-y-2">
+          <p>输入搜索内容时，会根据当前搜索引擎显示建议列表，可以通过以下方式操作：</p>
+          <div class="space-y-3 pl-4">
+            <div>
+              <p class="font-medium">键盘操作：</p>
+              <div class="example-box">
+                <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">↑↓</span>
+                <span class="text-gray-500 ml-2">上下键选择建议</span>
+              </div>
+              <div class="example-box">
+                <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">←</span>
+                <span class="text-gray-500 ml-2">左方向键将建议填充到搜索框，不执行搜索</span>
+              </div>
+              <div class="example-box">
+                <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">→</span>
+                <span class="text-gray-500 ml-2">右方向键将建议填充到搜索框并执行搜索</span>
+              </div>
+              <div class="example-box">
+                <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">Enter</span>
+                <span class="text-gray-500 ml-2">回车键选中当前建议并执行搜索</span>
+              </div>
+            </div>
+            <div>
+              <p class="font-medium">鼠标操作：</p>
+              <div class="example-box">
+                <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">鼠标悬停</span>
+                <span class="text-gray-500 ml-2">鼠标悬停在建议上会选中该建议</span>
+              </div>
+              <div class="example-box">
+                <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">左键点击</span>
+                <span class="text-gray-500 ml-2">点击建议将执行搜索</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 切换默认搜索引擎 -->  <!-- 原有区块保持不变 -->
       <div class="tutorial-section">
         <h3 class="text-xl font-semibold mb-2">切换默认搜索引擎</h3>

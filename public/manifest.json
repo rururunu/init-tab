@@ -17,11 +17,18 @@
     "scripting",
     "storage",
     "unlimitedStorage",
+    "https://www.baidu.com/",
+    "https://suggestion.baidu.com/",
+    "https://www.google.com/",
+    "https://suggestqueries.google.com/",
+    "https://api.bing.com/",
     "commands",
     "bookmarks"
   ],
-  "host_permissions": [
-    "<all_urls>"
+  "optional_permissions": [
+    "favicon",
+    "notifications",
+    "offscreen"
   ],
   "content_scripts": [
     {

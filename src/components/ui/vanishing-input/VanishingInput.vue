@@ -12,7 +12,7 @@
     <!-- Text Input -->
     <input ref="inputRef" :disabled="animating" type="text"
       class="relative z-50 size-full rounded-full border-none bg-transparent pl-4 pr-20 text-sm text-black focus:outline-none focus:ring-0 sm:pl-10 sm:text-base dark:text-white"
-      :class="{ 'text-transparent dark:text-transparent': animating }" @keydown.enter="handleKeyDown"
+      :class="{ 'text-transparent dark:text-transparent': animating }" @keydown="handleKeyDown" @focus="$emit('focus')" @blur="$emit('blur')"
       :value="vanishingText" @input="vanishingInput" />
 
     <!-- Submit Button -->
@@ -69,7 +69,7 @@ interface AnimatedPixel extends PixelData {
 const vanishingText = defineModel<string>({
   default: '',
 });
-const emit = defineEmits(['submit', 'change']);
+const emit = defineEmits(['submit', 'change', 'escape', 'focus', 'blur']);
 
 const canvasRef = templateRef<HTMLCanvasElement>('canvasRef');
 const inputRef = templateRef<HTMLInputElement>('inputRef');
@@ -81,6 +81,8 @@ const intervalRef = ref<number | null>(null);
 const newDataRef = ref<AnimatedPixel[]>([]);
 const animationFrame = ref<number | null>(null);
 
+let escapeTimeout: ReturnType<typeof setTimeout> | null = null;
+
 // props
 const props = withDefaults(defineProps<Props>(), {
   placeholders: () => ['Placeholder 1', 'Placeholder 2', 'Placeholder 3'],
@@ -89,7 +91,6 @@ const props = withDefaults(defineProps<Props>(), {
 // Focus on input when mounted
 onMounted(() => {
   if (!inputRef.value) return;
-  inputRef.value.focus();
 });
 
 function changePlaceholder(): void {
@@ -192,6 +193,9 @@ function animate(start: number = 0): void {
 function handleKeyDown(e: KeyboardEvent): void {
   if (e.key === 'Enter' && !animating.value) {
     vanishAndSubmit();
+  } else if (e.key === 'Escape') {
+    // 发出ESC键事件
+    emit('escape');
   }
 }
 
@@ -210,12 +214,52 @@ function handleSubmit(): void {
 }
 
 function vanishingInput(e: any): void {
-  vanishingText.value = e.target.value
+  const newValue = e.target.value;
+  vanishingText.value = newValue;
+  
+  // // 检测长按删除
+  // if (newValue === '') {
+  //   if (!isLongPressDelete.value) {
+  //     isLongPressDelete.value = true;
+  //     deleteTimeout = setTimeout(() => {
+  //       isLongPressDelete.value = false;
+  //     }, 300);
+  //   }
+  // }
+  
+  // // 立即检查空值
+  // if (!newValue || newValue.trim() === '') {
+  //   console.log('Emitting escape from input event');
+    
+  //   // 长按删除时不立即关闭，等待结束
+  //   if (!isLongPressDelete.value) {
+  //     emit('escape');
+  //   }
+  // }
 }
 
-// Watch for value changes
-watch(vanishingText, (newVal: string) => {
-  if (!animating.value) {
+// 添加长按删除状态跟踪
+// const isLongPressDelete = ref(false);
+// let deleteTimeout: ReturnType<typeof setTimeout> | null = null;
+
+// // 添加键盘事件监听
+// document.addEventListener('keyup', (e) => {
+//   if (e.key === 'Backspace' || e.key === 'Delete') {
+//     if (isLongPressDelete.value && deleteTimeout) {
+//       clearTimeout(deleteTimeout);
+//       isLongPressDelete.value = false;
+//       // 长按删除结束后触发关闭
+//       emit('escape');
+//     }
+//   }
+// });
+
+// 监听值变化
+watch(vanishingText, (newVal) => {
+  console.log('Watch value change:', newVal);
+  // 只处理非空情况
+  if (newVal && newVal.trim() !== '') {
+    vanishingText.value = newVal;
     emit('change', { target: { value: newVal } });
   }
 });
@@ -229,10 +273,10 @@ onBeforeUnmount(() => {
   if (intervalRef.value) {
     clearInterval(intervalRef.value);
   }
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
   if (animationFrame.value) {
     cancelAnimationFrame(animationFrame.value);
   }
-  document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
 </script>
 
