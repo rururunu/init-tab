@@ -161,27 +161,35 @@ const currentEngineType = ref<string>("bd");
 const currentSearchQuery = ref<string>("");
 const suggestionsFullyClosed = ref(true);
 const isSearchFocused = ref(false);
+// 添加一个标志来区分是手动输入还是通过上下键选择填充
+const isKeyboardFill = ref(false);
 
-// 监听输入变化
+// 监听输入框聚焦状态
+watch(isSearchFocused, (newVal) => {
+  if (newVal && ide.value) {
+    showSearchSuggestions.value = true;
+  } else if (!newVal) {
+    showSearchSuggestions.value = false;
+  }
+});
+
+// 监听输入内容变化
 watch(ide, (newValue) => {
+  // 如果是键盘选择填充，不触发搜索建议
+  if (isKeyboardFill.value) {
+    isKeyboardFill.value = false;
+    return;
+  }
+
   init();
 
-  if (newValue) {
-    showSearchSuggestions.value = true;
-  } else {
-    // 重置搜索引擎选择器显示状态
-    showSearchSuggestions.value = false;
-    showEngineSelector.value = false;
-    showBookmarkResults.value = false;
-    selectedBookmarkIndex.value = -1;
-  }
   const value = newValue?.trim();
 
   // 处理特殊命令
   if (value.startsWith("cd")) {
     // 处理cd命令
-      // 显示搜索引擎选择器
       showEngineSelector.value = true;
+    showSearchSuggestions.value = false;
       
       const engineKey = value.split(" ")[1];
       if (engineKey) {
@@ -194,7 +202,11 @@ watch(ide, (newValue) => {
       } else {
         searchStatusText.value = "请输入搜索引擎名称";
       }
-  } else if (value.startsWith("*")) {
+  } else {
+    // 非cd命令时，隐藏搜索引擎选择器
+    showEngineSelector.value = false;
+    
+    if (value.startsWith("*")) {
     // 处理收藏夹搜索
     const searchQuery = value.slice(1).trim();
     if (searchQuery) {
@@ -209,9 +221,7 @@ watch(ide, (newValue) => {
     // 普通搜索处理逻辑
     if (
       value &&
-      !value.startsWith("*") &&
-      !value.startsWith("cd") &&
-      !value.startsWith("/")
+        !value.startsWith("*")
     ) {
       const parts = value.split(" ");
       if (parts.length >= 1) {
@@ -236,16 +246,15 @@ watch(ide, (newValue) => {
         } else if (!matchedEngine) {
           // 如果没有匹配到搜索引擎，使用默认引擎
           currentEngineType.value = defaultKey.value;
-          currentSearchQuery.value = value;
+            // 如果以/开头，去掉/再搜索
+            currentSearchQuery.value = value.startsWith("/") ? value.slice(1) : value;
           showSearchSuggestions.value = true;
         } else {
           // 如果只有搜索引擎关键词，没有搜索词
           currentSearchQuery.value = "";
         }
       }
-    } else if (value.startsWith("/")) {
-      // 处理以/开头的命令
-      currentSearchQuery.value = value;
+      }
     }
   }
 
@@ -253,6 +262,7 @@ watch(ide, (newValue) => {
   if (!value) {
     // 当输入为空时，显示默认搜索引擎信息并关闭搜索建议
     showSearchSuggestions.value = false;
+    showEngineSelector.value = false;
     currentSearchQuery.value = "";
     const defaultEngine = jumpToData.value?.get(defaultKey.value);
     if (defaultEngine) {
@@ -273,15 +283,6 @@ watch(showSearchSuggestions, (newVal) => {
     }, 50);
   } else {
     suggestionsFullyClosed.value = false;
-  }
-});
-
-// 监听输入框聚焦状态
-watch(isSearchFocused, (newVal) => {
-  if (newVal) {
-    showSearchSuggestions.value = true;
-  } else {
-    showSearchSuggestions.value = false;
   }
 });
 
@@ -529,15 +530,15 @@ function handleSuggestionSelect(suggestion: string) {
 }
 
 // 处理搜索建议填充 - 左键点击，只填充不执行搜索
-function handleSuggestionFill(suggestion: string) {
+function handleSuggestionFill(data: { suggestion: string, isFillAction: boolean, isKeyboardFill?: boolean }) {
   // 根据当前搜索引擎类型和选中的建议构建搜索查询
   if (currentEngineType.value) {
     // 如果是默认引擎的关键词，直接使用建议作为搜索词
     if (currentEngineType.value === defaultKey.value) {
-      ide.value = suggestion;
+      ide.value = data.suggestion;
     } else {
       // 如果是特定引擎，保留引擎关键词
-      ide.value = `${currentEngineType.value} ${suggestion}`;
+      ide.value = `${currentEngineType.value} ${data.suggestion}`;
     }
 
     // 将焦点设置到输入框
@@ -547,8 +548,10 @@ function handleSuggestionFill(suggestion: string) {
       }, 10);
     }
 
-    // 不自动提交搜索，允许用户编辑
-    showSearchSuggestions.value = false;
+    // 如果是键盘选择填充，设置标志
+    if (data.isKeyboardFill) {
+      isKeyboardFill.value = true;
+    }
   }
 }
 
@@ -636,13 +639,19 @@ window.removeEventListener("keydown", handleKeyDown);
 
 <template>
   <div class="relative min-h-screen w-full transition-all duration-300">
-    <!-- 加载中遮罩 - 使用与背景相同的样式 -->
+    <!-- 加载中遮罩 -->
+    <Transition
+      enter-active-class="transition-opacity duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition-opacity duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
     <div
       v-if="isLoading"
-      class="fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-300"
-      :style="
-        wallpaperType === 'color' ? { backgroundColor: backgroundColor } : {}
-      "
+        class="fixed inset-0 z-50 flex items-center justify-center"
+        :style="wallpaperType === 'color' ? { backgroundColor: backgroundColor } : {}"
       :class="{ 'bg-slate-100 dark:bg-zinc-900': wallpaperType === 'none' }"
     >
       <!-- 如果是图片背景，使用相同的背景图片 -->
@@ -662,42 +671,69 @@ window.removeEventListener("keydown", handleKeyDown);
         <p class="mt-2 text-white text-shadow-sm">加载中...</p>
       </div>
     </div>
+    </Transition>
 
     <!-- 主要内容区域 -->
     <div class="relative z-10">
       <div
         id="base"
-        class="text-slate-700 dark:text-zinc-400"
+        class="text-slate-700 dark:text-zinc-400 transition-all duration-500 ease-in-out"
         :class="{ 'has-background': wallpaperType !== 'none' }"
         :style="getWallpaperStyle()"
       >
-        <!-- 保留遮罩层 -->
-        <div v-if="wallpaperType !== 'none' && showMask" id="mask"></div>
-        <div
-          v-if="showSearchSuggestions"
+        <!-- 遮罩层 - 调整z-index为0 -->
+        <Transition
+          enter-active-class="transition-opacity duration-500 ease-out"
+          enter-from-class="opacity-0"
+          enter-to-class="opacity-100"
+          leave-active-class="transition-opacity duration-300 ease-in"
+          leave-from-class="opacity-100"
+          leave-to-class="opacity-0"
+        >
+          <div v-if="wallpaperType !== 'none' && showMask" id="mask" class="z-0"></div>
+        </Transition>
+
+        <!-- 搜索建议遮罩 -->
+        <Transition
+          enter-active-class="transition-opacity duration-300 ease-out"
+          enter-from-class="opacity-0"
+          enter-to-class="opacity-100"
+          leave-active-class="transition-opacity duration-200 ease-in"
+          leave-from-class="opacity-100"
+          leave-to-class="opacity-0"
+        >
+          <div
+            v-if="ide && (showTime || showDate)"
           class="absolute inset-0 z-1 bg-white/20 dark:bg-black/20 backdrop-blur-sm pointer-events-none"
         ></div>
+        </Transition>
 
+        <!-- 设置按钮 -->
+        <Transition
+          enter-active-class="transition-all duration-300 ease-out"
+          enter-from-class="opacity-0 scale-95"
+          enter-to-class="opacity-100 scale-100"
+          leave-active-class="transition-all duration-200 ease-in"
+          leave-from-class="opacity-100 scale-100"
+          leave-to-class="opacity-0 scale-95"
+        >
         <div id="setup" class="flex items-center gap-4 z-[200]">
           <Icon
             @click="onSetup"
             icon="line-md:cog-filled"
-            class="text-2xl cursor-pointer hover:opacity-80"
+              class="text-2xl cursor-pointer hover:opacity-80 transition-all duration-200 hover:scale-110"
             :style="{ color: themeColor }"
           >
           </Icon>
         </div>
+        </Transition>
 
-        <!-- 时间和日期显示区域 - 确保在搜索建议完全关闭后才显示 -->
+        <!-- 时间和日期显示区域 -->
         <BlurReveal
           :delay="0.2"
           :duration="0.75"
           class="p-8"
-          v-if="
-            (showTime || showDate) &&
-            !showSearchSuggestions &&
-            suggestionsFullyClosed
-          "
+          v-if="(showTime || showDate) && !showSearchSuggestions && suggestionsFullyClosed && !showBookmarkResults && !showEngineSelector"
         >
           <template v-if="showTime">
             <h2
@@ -709,9 +745,7 @@ window.removeEventListener("keydown", handleKeyDown);
           </template>
           <template v-else>
             <div class="mb-5"></div>
-            <!-- 不显示时间时的占位空间 -->
           </template>
-          <!-- 使用占位符div保持间距一致 -->
           <div
             class="mb-30 text-center text-5xl font-bold sm:mb-50 select-none cursor-none"
           >
@@ -719,23 +753,26 @@ window.removeEventListener("keydown", handleKeyDown);
               date
             }}</span>
             <span v-else class="invisible">&nbsp;</span>
-            <!-- 不可见占位符 -->
           </div>
         </BlurReveal>
 
-        <!-- 搜索区域容器 - 当时间和日期都不显示时居中显示 -->
+        <!-- 搜索区域容器 -->
         <div
           :class="{
-            'h-[40vh] flex flex-col items-center justify-center':
-              !showTime && !showDate && !ide,
-            'flex flex-col items-center justify-start pt-8':
-              ide,
-            'transition-all duration-300': true,
+            'h-[40vh] flex flex-col items-center justify-center': !showTime && !showDate && !ide && !showBookmarkResults && !showEngineSelector,
+            'flex flex-col items-center justify-start pt-8': ide || showBookmarkResults || showEngineSelector,
+            'transition-all duration-500 ease-in-out': true,
           }"
-          class="w-full"
+          class="w-full relative z-2"
         >
-          <!-- 搜索区域包装器 - 用于正确定位搜索建议 -->
-          <div class="relative mx-auto max-w-xl w-full">
+          <!-- 搜索区域包装器 -->
+          <div 
+            class="relative mx-auto max-w-xl w-full transition-all duration-500 ease-in-out"
+            :class="{
+              'transform scale-100 translate-y-0': !showTime && !showDate,
+              'transform scale-95 translate-y-[-20px]': showTime || showDate,
+            }"
+          >
             <!-- 搜索框 -->
             <VanishingInput
               id="vanishing-input"
@@ -744,33 +781,49 @@ window.removeEventListener("keydown", handleKeyDown);
               @submit="submit"
               @escape="handleEscapeKey"
               ref="vanishingInputRef"
-              class="relative z-0"
+              class="relative z-2 transition-all duration-500 ease-in-out"
+              :class="{
+                'transform scale-100 opacity-100': true,
+                'hover:scale-[1.02]': !showSearchSuggestions && !showEngineSelector && !showBookmarkResults,
+                'shadow-lg hover:shadow-xl': !showSearchSuggestions && !showEngineSelector && !showBookmarkResults,
+              }"
             />
 
             <!-- 搜索建议 -->
+            <Transition
+              enter-active-class="transition-all duration-300 ease-out"
+              enter-from-class="opacity-0 scale-95 translate-y-[-10px]"
+              enter-to-class="opacity-100 scale-100 translate-y-0"
+              leave-active-class="transition-all duration-200 ease-in"
+              leave-from-class="opacity-100 scale-100 translate-y-0"
+              leave-to-class="opacity-0 scale-95 translate-y-[-10px]"
+            >
             <SearchSuggestions
+                v-if="showSearchSuggestions"
               :query="currentSearchQuery"
               :engine-type="currentEngineType"
               :visible="showSearchSuggestions"
               @select="handleSuggestionSelect"
               @fill="handleSuggestionFill"
               @close="showSearchSuggestions = false"
+                class="transition-all duration-300 ease-in-out relative z-2"
             />
+            </Transition>
           </div>
 
           <!-- 搜索状态提示框 -->
           <div class="relative mx-auto max-w-xl w-full mt-2">
             <Transition
-              enter-active-class="transition duration-200 ease-out"
-              enter-from-class="transform translate-y-2 opacity-0"
-              enter-to-class="transform translate-y-0 opacity-100"
-              leave-active-class="transition duration-150 ease-in"
-              leave-from-class="transform translate-y-0 opacity-100"
-              leave-to-class="transform translate-y-2 opacity-0"
+              enter-active-class="transition-all duration-300 ease-out"
+              enter-from-class="opacity-0 translate-y-2 scale-95"
+              enter-to-class="opacity-100 translate-y-0 scale-100"
+              leave-active-class="transition-all duration-200 ease-in"
+              leave-from-class="opacity-100 translate-y-0 scale-100"
+              leave-to-class="opacity-0 translate-y-2 scale-95"
             >
               <div
-                v-if="searchStatusText && !showSearchSuggestions"
-                class="input-group w-full px-4 py-2 rounded-lg text-sm text-center backdrop-blur-md bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-white border border-gray-200 dark:border-gray-700 shadow-lg"
+                v-if="searchStatusText && !showSearchSuggestions && !showEngineSelector && !showBookmarkResults"
+                class="input-group w-full px-4 py-2 rounded-lg text-sm text-center backdrop-blur-md bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-white border border-gray-200 dark:border-gray-700 shadow-lg transition-all duration-300 ease-in-out hover:shadow-xl"
               >
                 {{ searchStatusText }}
               </div>
@@ -779,61 +832,38 @@ window.removeEventListener("keydown", handleKeyDown);
 
           <!-- 搜索引擎选择器 -->
           <Transition
-            enter-active-class="transition duration-300 ease-out"
-            enter-from-class="transform scale-95 opacity-0"
-            enter-to-class="transform scale-100 opacity-100"
-            leave-active-class="transition duration-200 ease-in"
-            leave-from-class="transform scale-100 opacity-100"
-            leave-to-class="transform scale-95 opacity-0"
+            enter-active-class="transition-all duration-300 ease-out"
+            enter-from-class="opacity-0 scale-95 translate-y-4"
+            enter-to-class="opacity-100 scale-100 translate-y-0"
+            leave-active-class="transition-all duration-200 ease-in"
+            leave-from-class="opacity-100 scale-100 translate-y-0"
+            leave-to-class="opacity-0 scale-95 translate-y-4"
           >
             <div
               v-if="showEngineSelector"
-              class="engine-selector mx-auto max-w-3xl w-full mt-4 rounded-xl backdrop-blur-md bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden"
+              class="engine-selector relative z-2 mt-2 max-w-xl mx-auto w-full rounded-xl backdrop-blur-md bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden"
             >
-              <div
-                class="p-3 bg-gray-100/90 dark:bg-gray-700/90 border-b border-gray-200 dark:border-gray-600"
-              >
-                <h3 class="font-medium text-gray-800 dark:text-white">
-                  可用搜索引擎
-                </h3>
-                <p class="text-sm text-gray-500 dark:text-gray-300">
-                  点击选择要设置为默认的搜索引擎
-                </p>
+              <div class="p-2 text-xs text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <div class="flex justify-between items-center">
+                  <span>选择搜索引擎</span>
               </div>
-              <div
-                class="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"
-              >
+              </div>
+              <div class="p-2 space-y-1 max-h-[28vh] overflow-y-auto">
                 <div
-                  v-for="(engine, index) in [
-                    ...new Set(
-                      Array.from(jumpToData?.values() || []).map((e) => e.label)
-                    ),
-                  ].map((label) =>
-                    Array.from(jumpToData?.values() || []).find(
-                      (e) => e.label === label
-                    )
-                  )"
-                  :key="index"
-                  @click="engine && selectEngine(engine.key[0])"
-                  class="engine-item relative flex items-center p-3 rounded-lg cursor-pointer transition-all duration-150 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600"
-                  :class="{
-                    'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-600':
-                      engine && defaultKey === engine.key[0],
-                  }"
+                  v-for="engine in jumpData"
+                  :key="engine.key[0]"
+                  @click="selectEngine(engine.key[0])"
+                  class="engine-item p-2 rounded-lg cursor-pointer transition-all duration-150 hover:bg-gray-100 dark:hover:bg-gray-700 border border-transparent"
                 >
-                  <div class="flex-grow">
-                    <div class="font-medium text-gray-800 dark:text-white">
-                      {{ engine?.label }}
+                  <div class="flex items-center justify-between">
+                    <div class="flex-grow min-w-0">
+                      <div class="font-medium text-gray-800 dark:text-white text-sm">
+                        {{ engine.label }}
                     </div>
-                    <div class="text-sm text-gray-500 dark:text-gray-400">
-                      关键词: {{ engine?.key.join(", ") }}
                     </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ engine.key.join(" / ") }}
                   </div>
-                  <div
-                    v-if="engine && defaultKey === engine.key[0]"
-                    class="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full"
-                  >
-                    当前默认
                   </div>
                 </div>
               </div>
@@ -842,16 +872,16 @@ window.removeEventListener("keydown", handleKeyDown);
 
           <!-- 收藏夹搜索结果 -->
           <Transition
-            enter-active-class="transition duration-300 ease-out"
-            enter-from-class="transform scale-95 opacity-0"
-            enter-to-class="transform scale-100 opacity-100"
-            leave-active-class="transition duration-200 ease-in"
-            leave-from-class="transform scale-100 opacity-100"
-            leave-to-class="transform scale-95 opacity-0"
+            enter-active-class="transition-all duration-300 ease-out"
+            enter-from-class="opacity-0 scale-95 translate-y-4"
+            enter-to-class="opacity-100 scale-100 translate-y-0"
+            leave-active-class="transition-all duration-200 ease-in"
+            leave-from-class="opacity-100 scale-100 translate-y-0"
+            leave-to-class="opacity-0 scale-95 translate-y-4"
           >
             <div
               v-if="showBookmarkResults"
-              class="z-2 bookmark-results mx-auto max-w-3xl w-full mt-4 rounded-xl backdrop-blur-md bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden"
+              class="z-2 bookmark-results mx-auto max-w-3xl w-full mt-4 rounded-xl backdrop-blur-md bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden transition-all duration-300 ease-in-out hover:shadow-2xl"
             >
               <div
                 class="p-2 bg-gray-100/90 dark:bg-gray-700/90 border-b border-gray-200 dark:border-gray-600"
@@ -870,8 +900,7 @@ window.removeEventListener("keydown", handleKeyDown);
                   @click="openBookmark(bookmark.url)"
                   class="bookmark-item p-2 rounded-lg cursor-pointer transition-all duration-150 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600"
                   :class="{
-                    'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-600 ring-2 ring-blue-500 dark:ring-blue-400':
-                      index === selectedBookmarkIndex,
+                    'bg-blue-100 dark:bg-blue-800/50 border-blue-300 dark:border-blue-700': index === selectedBookmarkIndex,
                   }"
                 >
                   <div class="flex items-center gap-2">
@@ -912,6 +941,7 @@ window.removeEventListener("keydown", handleKeyDown);
           </Transition>
         </div>
 
+        <!-- 设置对话框 -->
         <Dialog
           :show="setup.show"
           :select="setUpSelect"
@@ -960,17 +990,19 @@ window.removeEventListener("keydown", handleKeyDown);
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background-color: #f8f9fa; /* 浅色模式下的默认背景色 */
+  background-color: #f8f9fa;
+  transition: all 0.5s ease-in-out;
 }
 
 .dark #base {
-  background-color: #18181b; /* 暗色模式下的默认背景色 */
+  background-color: #18181b;
 }
 
 #base.has-background {
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
+  transition: background-image 0.5s ease-in-out;
 }
 
 #mask {
@@ -979,18 +1011,18 @@ window.removeEventListener("keydown", handleKeyDown);
   left: 0;
   width: 100vw;
   height: 100vh;
-  z-index: 1;
+  z-index: 0;
   background-color: rgba(0, 0, 0, 0.15);
+  transition: background-color 0.3s ease-in-out;
 }
 
 .p-8,
 #vanishing-input,
 .input-group,
-.engine-selector {
+.engine-selector,
+.search-suggestions-container {
   position: relative;
-  /* 建立新的层级上下文 */
   z-index: 2;
-  /* 必须大于 #mask 的 z-index */
 }
 
 #setup {
@@ -1005,85 +1037,32 @@ window.removeEventListener("keydown", handleKeyDown);
 
 /* 搜索引擎选择器样式 */
 .engine-item {
-  transition: transform 0.15s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .engine-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-@media (prefers-color-scheme: dark) {
-  #base {
-    background-color: #09090b;
-  }
-}
-
-@media (prefers-color-scheme: light) {
-  #base {
-    background-color: aliceblue;
-  }
-}
-
-/* 添加过渡效果 */
-.fade-bg-enter-active,
-.fade-bg-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-bg-enter-from,
-.fade-bg-leave-to {
-  opacity: 0;
-}
-
-/* 添加壁纸相关过渡效果 */
-.bg-transition {
-  transition: background-image 0.3s ease-in-out;
-}
-
-/* 确保内容在暗色背景上可见 */
-.dark .bg-overlay {
-  background-color: rgba(0, 0, 0, 0.4);
-}
-
-.light .bg-overlay {
-  background-color: rgba(255, 255, 255, 0.4);
-}
-
-/* 添加搜索状态提示样式 */
-.search-status {
-  position: absolute;
-  top: -40px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 50;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-/* 确保输入组与搜索框保持一致的层级 */
-.input-group {
-  position: relative;
-  z-index: 2;
-  /* 与搜索框保持相同的z-index */
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.1),
+    0 4px 8px -2px rgba(0, 0, 0, 0.05);
 }
 
 /* 收藏夹搜索结果样式 */
 .bookmark-item {
-  transition: all 0.15s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0.5rem;
 }
 
 .bookmark-item:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px) scale(1.01);
+  box-shadow: 0 4px 8px -2px rgba(0, 0, 0, 0.1);
 }
 
 /* 选中状态样式 */
-.bookmark-item[class*="bg-blue-50"] {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
-}
+.bookmark-item.bg-blue-100,
+.bookmark-item.dark\:bg-blue-800\/50 {
+  transform: translateY(-1px) scale(1.01);
+  box-shadow: 0 4px 8px -2px rgba(0, 0, 0, 0.1);
+  }
 
 /* 自定义滚动条样式 */
 .bookmark-results {
@@ -1104,10 +1083,145 @@ window.removeEventListener("keydown", handleKeyDown);
 .bookmark-results::-webkit-scrollbar-thumb {
   background-color: rgba(0, 0, 0, 0.2);
   border-radius: 2px;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.3s ease;
 }
 
 .bookmark-results::-webkit-scrollbar-thumb:hover {
   background-color: rgba(0, 0, 0, 0.3);
 }
+
+/* 添加全局过渡效果 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* 添加缩放过渡效果 */
+.scale-enter-active,
+.scale-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.scale-enter-from,
+.scale-leave-to {
+  transform: scale(0.95);
+}
+
+/* 添加滑动过渡效果 */
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateY(10px);
+}
+
+/* 添加模糊过渡效果 */
+.blur-enter-active,
+.blur-leave-active {
+  transition: filter 0.3s ease;
+}
+
+.blur-enter-from,
+.blur-leave-to {
+  filter: blur(10px);
+}
+
+/* 搜索框动画相关样式 */
+#vanishing-input {
+  will-change: transform, opacity, box-shadow;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  perspective: 1000px;
+}
+
+/* 搜索框悬停效果 */
+#vanishing-input:hover {
+  transform: translateY(-1px);
+}
+
+/* 搜索框聚焦效果 */
+#vanishing-input:focus-within {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* 搜索框动画过渡 */
+#vanishing-input,
+.search-container {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 搜索建议容器动画 */
+.search-suggestions-container {
+  transform-origin: top center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 搜索框移动动画 */
+@keyframes searchBoxMove {
+  0% {
+    transform: translateY(0) scale(1);
+}
+  50% {
+    transform: translateY(-10px) scale(0.98);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+.search-box-move {
+  animation: searchBoxMove 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 搜索框缩放动画 */
+@keyframes searchBoxScale {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.search-box-scale {
+  animation: searchBoxScale 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 搜索框阴影动画 */
+@keyframes searchBoxShadow {
+  0% {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  }
+  100% {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.search-box-shadow {
+  animation: searchBoxShadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 搜索框组合动画 */
+.search-box-combined {
+  animation: 
+    searchBoxMove 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    searchBoxScale 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    searchBoxShadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
 </style>
+

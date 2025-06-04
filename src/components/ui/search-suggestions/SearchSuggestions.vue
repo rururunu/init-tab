@@ -15,9 +15,8 @@
       <div
         class="p-2 text-xs text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50"
       >
-        <div class="flex justify-between items-center">
-          <span>上下键选择 · 回车执行搜索</span>
-          <span>← 填充 · 搜索 →</span>
+      <div class="flex justify-between items-center">
+          <span>上下键选择填充 · 回车执行搜索</span>
         </div>
       </div>
       <div
@@ -30,6 +29,7 @@
           @click="selectSuggestion(suggestion)"
           @mouseenter="selectedIndex = index"
           class="suggestion-item p-2 rounded-lg cursor-pointer transition-all duration-150 hover:bg-gray-100 dark:hover:bg-gray-700 border border-transparent"
+          :class="{'bg-blue-100 dark:bg-blue-800/60 shadow-sm': index === selectedIndex}"
         >
           <div class="flex items-center gap-2">
             <div class="flex-grow min-w-0">
@@ -44,11 +44,7 @@
             >
               <span
                 class="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 rounded border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-300"
-                >←填充</span
-              >
-              <span
-                class="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 rounded border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-300"
-                >搜索→</span
+                >回车搜索</span
               >
             </div>
           </div>
@@ -122,7 +118,7 @@ const selectSuggestion = (suggestion: string) => {
 
 // 填充建议（左键点击）- 只填充到搜索框不执行搜索
 const fillSuggestion = (suggestion: string) => {
-  emit("fill", suggestion);
+  emit("fill", { suggestion, isFillAction: true });
 };
 
 // 处理键盘导航
@@ -137,6 +133,11 @@ const handleKeyDown = (e: KeyboardEvent) => {
       } else {
         selectedIndex.value--;
       }
+      // 确保填充当前选中项，并标记为键盘选择填充
+      if (selectedIndex.value >= 0) {
+        fillSuggestion(suggestions.value[selectedIndex.value]);
+        emit("fill", { suggestion: suggestions.value[selectedIndex.value], isFillAction: true, isKeyboardFill: true });
+      }
       scrollToSelectedSuggestion();
       break;
     case "ArrowDown":
@@ -146,25 +147,12 @@ const handleKeyDown = (e: KeyboardEvent) => {
       } else {
         selectedIndex.value++;
       }
-      scrollToSelectedSuggestion();
-      break;
-    case "ArrowLeft": // 键盘左键 - 填充但不执行搜索
-      if (
-        selectedIndex.value >= 0 &&
-        selectedIndex.value < suggestions.value.length
-      ) {
-        e.preventDefault();
+      // 确保填充当前选中项，并标记为键盘选择填充
+      if (selectedIndex.value >= 0) {
         fillSuggestion(suggestions.value[selectedIndex.value]);
+        emit("fill", { suggestion: suggestions.value[selectedIndex.value], isFillAction: true, isKeyboardFill: true });
       }
-      break;
-    case "ArrowRight": // 键盘右键 - 填充并执行搜索
-      if (
-        selectedIndex.value >= 0 &&
-        selectedIndex.value < suggestions.value.length
-      ) {
-        e.preventDefault();
-        selectSuggestion(suggestions.value[selectedIndex.value]);
-      }
+      scrollToSelectedSuggestion();
       break;
     case "Enter":
       if (
@@ -185,6 +173,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
 const fetchSuggestions = async () => {
   if (!props.query || props.query.length < 2 || !props.engineType) {
     suggestions.value = [];
+    selectedIndex.value = -1; // 重置选中索引
     return;
   }
 
@@ -193,6 +182,7 @@ const fetchSuggestions = async () => {
     : props.query;
   if (queryText.length < 1) {
     suggestions.value = [];
+    selectedIndex.value = -1; // 重置选中索引
     return;
   }
 
@@ -201,6 +191,7 @@ const fetchSuggestions = async () => {
   }
 
   abortController.value = new AbortController();
+  selectedIndex.value = -1; // 获取新建议时重置选中索引
 
   let apiUrl = "";
   
@@ -254,7 +245,7 @@ watch(
       fetchSuggestions();
     } else {
       suggestions.value = [];
-      // 当输入为空时通知父组件关闭搜索建议
+      selectedIndex.value = -1; // 重置选中索引
       emit("close");
     }
   },
