@@ -627,6 +627,7 @@ const searchBookmarks = async (query: string) => {
 const openBookmark = (url: string | undefined) => {
   if (url) {
     window.open(url, "_blank", "noopener,noreferrer");
+    showBookmarkResults.value = false;
   }
 };
 
