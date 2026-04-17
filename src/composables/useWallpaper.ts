@@ -26,6 +26,10 @@ const showTime = ref<boolean>(true); // 是否显示时间
 const showSeconds = ref<boolean>(false);
 const showDate = ref<boolean>(true);
 const use24Hour = ref<boolean>(true); // 是否使用24小时制
+const clockFont = ref<string>('Inter'); // 时钟字体
+const clockFontSize = ref<number>(96);   // 时钟字体大小 (px)
+const clockFontWeight = ref<number>(700); // 时钟字体粗细
+const useCustomColor = ref<boolean>(false); // 是否使用自定义颜色
 
 export function useWallpaper() {
     // 定义配置对象类型
@@ -41,6 +45,10 @@ export function useWallpaper() {
         showSeconds: boolean;
         showDate: boolean;
         use24Hour: boolean;
+        clockFont: string;
+        clockFontSize: number;
+        clockFontWeight: number;
+        useCustomColor: boolean;
     }
 
     // 默认配置
@@ -55,7 +63,11 @@ export function useWallpaper() {
         showTime: true,
         showSeconds: false,
         showDate: true,
-        use24Hour: true
+        use24Hour: true,
+        clockFont: 'Inter',
+        clockFontSize: 96,
+        clockFontWeight: 700,
+        useCustomColor: false
     };
 
     // 加载壁纸状态
@@ -168,6 +180,10 @@ export function useWallpaper() {
             showSeconds.value = config.showSeconds;
             showDate.value = config.showDate;
             use24Hour.value = config.use24Hour;
+            clockFont.value = config.clockFont || 'Inter';
+            clockFontSize.value = config.clockFontSize ?? 96;
+            clockFontWeight.value = config.clockFontWeight ?? 700;
+            useCustomColor.value = config.useCustomColor ?? false;
             
             // 如果是壁纸类型且没有从存储中获取到主色调，则设置为白色
             if ((config.wallpaperType === 'custom' || config.wallpaperType === 'source') && themeColor.value === '#495057') {
@@ -215,7 +231,11 @@ export function useWallpaper() {
                 showTime: showTime.value,
                 showSeconds: showSeconds.value,
                 showDate: showDate.value,
-                use24Hour: use24Hour.value
+                use24Hour: use24Hour.value,
+                clockFont: clockFont.value,
+                clockFontSize: clockFontSize.value,
+                clockFontWeight: clockFontWeight.value,
+                useCustomColor: useCustomColor.value
             };
             
             // 优先保存到 chrome.storage.local
@@ -388,6 +408,30 @@ export function useWallpaper() {
         await saveState();
     };
 
+    // 更新时钟字体
+    const updateClockFont = async (font: string) => {
+        clockFont.value = font;
+        await saveState();
+    };
+
+    // 更新时钟字体大小
+    const updateClockFontSize = async (size: number) => {
+        clockFontSize.value = size;
+        await saveState();
+    };
+
+    // 更新时钟字体粗细
+    const updateClockFontWeight = async (weight: number) => {
+        clockFontWeight.value = weight;
+        await saveState();
+    };
+
+    // 更新是否使用自定义颜色
+    const updateUseCustomColor = async (use: boolean) => {
+        useCustomColor.value = use;
+        await saveState();
+    };
+
     // 组件挂载时自动加载状态
     onMounted(() => {
         loadState();
@@ -405,6 +449,10 @@ export function useWallpaper() {
         showSeconds,
         showDate,
         use24Hour,
+        clockFont,
+        clockFontSize,
+        clockFontWeight,
+        useCustomColor,
         loadState,
         updateWallpaper,
         updateSourceUrl,
@@ -414,6 +462,10 @@ export function useWallpaper() {
         updateShowSeconds,
         updateShowDate,
         updateUse24Hour,
+        updateClockFont,
+        updateClockFontSize,
+        updateClockFontWeight,
+        updateUseCustomColor,
         getWallpaperStyle,
         toggleMask,
         clearWallpaperCache

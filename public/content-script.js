@@ -1,323 +1,266 @@
+// 防止 content script 被多次执行（manifest + executeScript 双重注入场景）
+if (window.__gsExtInit) { /* already initialized */ } else {
+window.__gsExtInit = true;
+
 const isExtensionEnvironment = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage;
 
-// 全局变量声明
+// ─── 数据 ────────────────────────────────────────────────
 const defaultJumpData = [
-  {
-    key: ["bd", "baidu"],
-    label: "BaiDu百度",
-    jumpUrl: `https://www.baidu.com/s?tn=22073068_8_oem_dg&ch=2&ie=utf-8&word=&<query>`
-  },
-  {
-    key: ["gg", "google"],
-    label: "Google谷歌",
-    jumpUrl: `https://www.google.com/search?q=&<query>`
-  },
-  {
-    key: ["bi", "bing"],
-    label: "Bing必应",
-    jumpUrl: `https://www.bing.com/search?form=QBLH&q=&<query>&mkt=zh-CN`
-  }
+  { key: ['bd', 'baidu'], label: 'BaiDu百度',   jumpUrl: 'https://www.baidu.com/s?tn=22073068_8_oem_dg&ch=2&ie=utf-8&word=&<query>' },
+  { key: ['gg', 'google'], label: 'Google谷歌', jumpUrl: 'https://www.google.com/search?q=&<query>' },
+  { key: ['bi', 'bing'],   label: 'Bing必应',   jumpUrl: 'https://www.bing.com/search?form=QBLH&q=&<query>&mkt=zh-CN' },
 ];
 
-let jumpData = defaultJumpData;
-let jumpToData = new Map();
-let defaultKey = "bd";
-let searchHint = null;
+let jumpData     = defaultJumpData;
+let jumpToData   = new Map();
+let defaultKey   = 'bd';
 
+// ─── 存储 ────────────────────────────────────────────────
 const storage = {
   async set(key, value) {
     try {
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
         await chrome.storage.local.set({ [key]: value });
       } else {
         localStorage.setItem(key, JSON.stringify(value));
       }
-    } catch (e) {
-      console.error('Storage set error:', e);
-    }
+    } catch (e) { console.error('Storage set error:', e); }
   },
-
   async get(key) {
     try {
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        const result = await chrome.storage.local.get(key);
-        return result[key];
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        const r = await chrome.storage.local.get(key);
+        return r[key];
       } else {
         const item = localStorage.getItem(key);
         return item ? JSON.parse(item) : null;
       }
-    } catch (e) {
-      console.error('Storage get error:', e);
-      return null;
-    }
-  }
+    } catch (e) { console.error('Storage get error:', e); return null; }
+  },
 };
 
+// ─── 工具 ────────────────────────────────────────────────
+function getFavicon(url) {
+  try { return new URL(url).origin + '/favicon.ico'; } catch { return ''; }
+}
+
+function segmentationContent(medium, content) {
+  const [first, ...rest] = content.split(medium);
+  return [first, rest.join(' ')];
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// 从输入值中解析搜索引擎和查询词
+function parseInputQuery(value) {
+  if (value.startsWith('/')) return { engineKey: defaultKey, query: value.slice(1) };
+  for (const [key] of jumpToData) {
+    if (value.startsWith(key + ' ') && value.length > key.length + 1) {
+      return { engineKey: key, query: value.slice(key.length + 1).trim() };
+    }
+  }
+  return { engineKey: defaultKey, query: value };
+}
+
+// ─── 样式注入 ─────────────────────────────────────────────
 function injectStyles() {
   const style = document.createElement('style');
   style.textContent = `
-#global-search-extension {
+/* ── 覆盖层 ── */
+#gs-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0);
+  inset: 0;
+  background: rgba(0,0,0,0);
   backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
   display: none;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
+  padding-top: 14vh;
   z-index: 2147483647;
-  transition: all 0.3s ease-out;
+  transition: background 0.22s ease, backdrop-filter 0.22s ease;
   cursor: pointer;
 }
-
-#global-search-extension.show {
-  background-color: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(4px);
+#gs-overlay.show {
+  background: rgba(0,0,0,0.28);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
-#global-search-box {
+/* ── 卡片 ── */
+#gs-box {
   position: relative;
-  width: 0;
-  max-width: 600px;
-  background-color: rgba(255, 255, 255, 0.95);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: default;
-  overflow: visible;
-}
-
-#global-search-box.show {
   width: 90%;
+  max-width: 580px;
+  background: rgba(255,255,255,0.98);
+  border-radius: 18px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.14), 0 4px 16px rgba(0,0,0,0.08);
+  border: 1px solid rgba(0,0,0,0.06);
+  overflow: hidden;
+  opacity: 0;
+  transform: scale(0.95) translateY(-10px);
+  transition: opacity 0.22s cubic-bezier(.4,0,.2,1), transform 0.22s cubic-bezier(.4,0,.2,1);
+  cursor: default;
+}
+#gs-box.show {
   opacity: 1;
-  transform: scale(1);
+  transform: scale(1) translateY(0);
 }
 
-#global-search-input {
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
-  font-size: 16px;
+/* ── 输入行 ── */
+#gs-input-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  gap: 8px;
+  min-height: 56px;
+}
+
+/* ── 引擎图标按钮 ── */
+#gs-engine-btn {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  transition: background 0.12s;
+  opacity: 0.82;
+}
+#gs-engine-btn:hover { background: rgba(0,0,0,0.06); opacity: 1; }
+#gs-engine-btn img { width: 22px; height: 22px; border-radius: 4px; object-fit: contain; display: block; }
+#gs-engine-btn .gs-fallback {
+  font-size: 10px; font-weight: 700; color: #6b7280;
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.06); border-radius: 4px;
+}
+
+/* ── 搜索输入框 ── */
+#gs-input {
+  flex: 1;
+  border: none;
   background: transparent;
   outline: none;
-  color: #000000;
-  transition: all 0.3s ease;
+  font-size: 16px;
+  color: #111827;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  padding: 4px 0;
+  caret-color: #3b82f6;
+}
+#gs-input::placeholder { color: #9ca3af; }
+
+/* ── Esc 提示 ── */
+#gs-esc-hint {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #9ca3af;
+  background: rgba(0,0,0,0.05);
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-family: monospace;
+  letter-spacing: 0.04em;
+  user-select: none;
 }
 
-#global-search-input:focus {
-  border-color: #006BDF;
-  box-shadow: 0 0 0 4px rgba(0, 107, 223, 0.1);
+/* ── 分隔线 ── */
+.gs-divider {
+  height: 1px;
+  background: rgba(0,0,0,0.07);
 }
 
-#global-search-hint {
-  position: absolute;
-  top: -30px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 14px;
-  color: #ffffff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  opacity: 0;
-  transition: all 0.3s ease;
-}
-
-#global-search-hint.show {
-  opacity: 1;
-}
-
-#search-status {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  padding: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  margin-bottom: 8px;
-  font-size: 14px;
-  color: #666;
-}
-
-#search-engines-list {
-  position: absolute;
-  top: calc(100% + 64px);
-  left: 0;
-  right: 0;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  padding: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  display: none;
-}
-
-#search-engines-list.show {
-  display: block;
-}
-
-.engine-item {
-  padding: 10px 16px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.05);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-bottom: 8px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.engine-item:last-child {
-  margin-bottom: 0;
-}
-
-.engine-item:hover {
-  background: rgba(0, 107, 223, 0.1);
-  color: #006BDF;
-}
-
-.engine-keys {
-  color: #666;
-  font-size: 0.9em;
-}
-
-#bookmark-results {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 8px;
-  padding: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  display: none;
+/* ── 下拉区域 ── */
+#gs-dropdown {
   max-height: 300px;
   overflow-y: auto;
-  transition: all 0.3s ease;
-  z-index: 1000;
-  margin-top: 8px;
+  padding: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.12) transparent;
 }
+#gs-dropdown::-webkit-scrollbar { width: 4px; }
+#gs-dropdown::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 2px; }
 
-/* 自定义滚动条样式 */
-#bookmark-results::-webkit-scrollbar {
-  width: 8px; /* 滚动条宽度 */
-}
-
-#bookmark-results::-webkit-scrollbar-thumb {
-  background-color: transparent; /* 滚动条颜色 */
-}
-
-#bookmark-results::-webkit-scrollbar-track {
-  background: transparent; /* 滚动条轨道颜色 */
-}
-
-.bookmark-item {
-  background: white;
-  border: 2px solid transparent;
-  border-radius: 8px;
-  padding: 12px;
-  margin: 8px 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s, border 0.2;
-  color: #333;
-  padding: 8px 12px;
+/* ── 引擎列表项 ── */
+.gs-engine-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
   cursor: pointer;
+  transition: background 0.1s;
 }
-
-.bookmark-item:hover {
-  transform: scale(1.02);
+.gs-engine-item:hover, .gs-engine-item.active { background: rgba(59,130,246,0.08); }
+.gs-engine-item img { width: 16px; height: 16px; border-radius: 3px; object-fit: contain; flex-shrink: 0; }
+.gs-engine-name { flex: 1; font-size: 13px; font-weight: 500; color: #1f2937; }
+.gs-engine-key {
+  font-size: 11px; color: #9ca3af; font-family: monospace;
+  background: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 5px;
 }
+.gs-engine-check { font-size: 13px; color: #3b82f6; flex-shrink: 0; }
 
-.bookmark-item.selected {
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-.bookmark-title {
-  font-weight: 500;
-  margin-bottom: 4px;
-}
-
-.bookmark-url {
-  font-size: 12px;
-  color: #666;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-  display: block;
-}
-
-.bookmark-hint {
-  font-size: 12px;
-  color: #666;
-  margin-top: 4px;
-}
-
-.no-results {
-  padding: 12px;
-  text-align: center;
-  color: #666;
-}
-
-.more-results {
+/* ── 收藏夹列表项 ── */
+.gs-bm-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 8px 12px;
-  text-align: center;
-  color: #666;
-  font-size: 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.1s;
 }
+.gs-bm-item:hover, .gs-bm-item.selected { background: rgba(59,130,246,0.08); }
+.gs-bm-item img { width: 16px; height: 16px; border-radius: 3px; object-fit: contain; flex-shrink: 0; }
+.gs-bm-info { flex: 1; min-width: 0; }
+.gs-bm-title { font-size: 13px; font-weight: 500; color: #1f2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs-bm-url   { font-size: 11px; color: #9ca3af; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+.gs-bm-enter { font-size: 11px; color: #3b82f6; font-weight: 500; flex-shrink: 0; }
 
+/* ── 空/更多 ── */
+.gs-empty { text-align: center; color: #9ca3af; font-size: 13px; padding: 16px 0; }
+.gs-more  { text-align: center; color: #9ca3af; font-size: 11px; padding: 6px 0;
+            border-top: 1px solid rgba(0,0,0,0.06); margin-top: 4px; }
+
+/* ── 搜索建议 ── */
+.gs-sug-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 10px; cursor: pointer; transition: background 0.1s;
+}
+.gs-sug-item:hover, .gs-sug-item.selected { background: rgba(59,130,246,0.08); }
+.gs-sug-text {
+  flex: 1; font-size: 13px; color: #1f2937;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gs-sug-hl { color: #9ca3af; font-weight: 400; }
+.gs-sug-enter { font-size: 11px; color: #3b82f6; font-weight: 500; flex-shrink: 0; }
+
+/* ── 暗色模式 ── */
 @media (prefers-color-scheme: dark) {
-  #global-search-box {
-    background-color: rgba(30, 30, 30, 0.95);
+  .gs-sug-item:hover, .gs-sug-item.selected { background: rgba(59,130,246,0.14); }
+  .gs-sug-text { color: #f4f4f5; }
+  .gs-sug-hl  { color: #71717a; }
+  #gs-box {
+    background: rgba(26,26,28,0.98);
+    border-color: rgba(255,255,255,0.08);
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.2);
   }
-  
-  #global-search-input {
-    color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  #search-status,
-  #search-engines-list,
-  #bookmark-results {
-    background: rgba(30, 30, 30, 0.95);
-    color: #fff;
-  }
-  
-  .engine-item {
-    background: rgba(255, 255, 255, 0.1);
-  }
-  
-  .engine-keys {
-    color: #999;
-  }
-
-  .bookmark-item {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: #999;
-  }
-
-  .bookmark-item:hover,
-  .bookmark-item.selected {
-    background-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  .bookmark-title {
-    color: #ffffff;
-  }
-  
-  .bookmark-url,
-  .bookmark-hint,
-  .no-results,
-  .more-results {
-    color: #999;
-  }
+  #gs-input { color: #f4f4f5; }
+  #gs-input::placeholder { color: #52525b; }
+  #gs-esc-hint { background: rgba(255,255,255,0.07); }
+  #gs-engine-btn:hover { background: rgba(255,255,255,0.08); }
+  #gs-engine-btn .gs-fallback { background: rgba(255,255,255,0.08); color: #a1a1aa; }
+  .gs-divider { background: rgba(255,255,255,0.08); }
+  .gs-engine-item:hover, .gs-engine-item.active,
+  .gs-bm-item:hover, .gs-bm-item.selected { background: rgba(59,130,246,0.14); }
+  .gs-engine-name, .gs-bm-title { color: #f4f4f5; }
+  .gs-engine-key { background: rgba(255,255,255,0.08); color: #71717a; }
+  .gs-overlay { background: rgba(0,0,0,0.4); }
 }
 `;
   document.head.appendChild(style);
@@ -329,134 +272,102 @@ if (document.readyState === 'loading') {
   injectStyles();
 }
 
-// 修改搜索收藏夹函数
-async function searchBookmarks(query) {
-  try {
-    const cached = await storage.get('cachedBookmarks');
-    if (!cached) return [];
+// ─── 状态 ────────────────────────────────────────────────
+let dropdownMode           = null; // 'engines' | 'bookmarks' | 'suggestions' | null
+let selectedBookmarkIndex  = -1;
+let currentBookmarkResults = [];
 
-    const bookmarks = JSON.parse(cached);
-    const lowerQuery = query.toLowerCase();
+let currentSuggestions      = [];
+let selectedSuggestionIndex = -1;
+let currentSearchQuery      = '';   // 上次实际输入的查询词（导航时保留）
+let suggestAbortCtrl        = null;
+let suggestTimer            = null;
 
-    return bookmarks.filter(b => {
-      return b.title?.toLowerCase().includes(lowerQuery) ||
-        b.url?.toLowerCase().includes(lowerQuery);
-    }).slice(0, 5);
-  } catch (e) {
-    console.error('搜索失败:', e);
-    return [];
-  }
+// ─── 下拉渲染 ─────────────────────────────────────────────
+function renderEngines(container) {
+  jumpData.forEach(engine => {
+    const item = document.createElement('div');
+    item.className = 'gs-engine-item' + (engine.key.includes(defaultKey) ? ' active' : '');
+
+    const img = document.createElement('img');
+    img.src = getFavicon(engine.jumpUrl);
+    img.onerror = () => { img.style.display = 'none'; };
+
+    const name = document.createElement('span');
+    name.className = 'gs-engine-name';
+    name.textContent = engine.label;
+
+    const key = document.createElement('span');
+    key.className = 'gs-engine-key';
+    key.textContent = engine.key[0].toUpperCase();
+
+    item.appendChild(img);
+    item.appendChild(name);
+    item.appendChild(key);
+
+    if (engine.key.includes(defaultKey)) {
+      const check = document.createElement('span');
+      check.className = 'gs-engine-check';
+      check.textContent = '✓';
+      item.appendChild(check);
+    }
+
+    item.addEventListener('click', async () => {
+      defaultKey = engine.key[0];
+      await storage.set('defaultKey', engine.key[0]);
+      updateEngineBtn();
+      hideDropdown();
+    });
+
+    container.appendChild(item);
+  });
 }
 
-// 创建搜索结果容器
-const createBookmarkResults = () => {
-  const container = document.createElement('div');
-  container.id = 'bookmark-results';
-  container.className = 'bookmark-results';
-  // container.style.cssText = `
-  //   position: absolute;
-  //   top: 100%;
-  //   left: 0;
-  //   right: 0;
-  //   max-height: 300px;
-  //   overflow-y: auto;
-  //   background: rgba(255, 255, 255, 0.95);
-  //   border-radius: 8px;
-  //   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  //   margin-top: 8px;
-  //   z-index: 1000;
-  // `;
-  return container;
-};
-
-// 更新搜索结果
-const updateBookmarkResults = (results, selectedIndex = -1) => {
-  const container = document.getElementById('bookmark-results');
-  if (!container) return;
-
-  container.innerHTML = '';
-
+function renderBookmarks(container, results, selectedIndex) {
   if (results.length === 0) {
-    const noResults = document.createElement('div');
-    noResults.className = 'no-results';
-    noResults.textContent = '未找到匹配的收藏夹';
-    container.appendChild(noResults);
+    const empty = document.createElement('div');
+    empty.className = 'gs-empty';
+    empty.textContent = '未找到匹配的收藏夹';
+    container.appendChild(empty);
     return;
   }
 
-  results.slice(0, 5).forEach((bookmark, index) => {
+  results.slice(0, 5).forEach((bm, i) => {
     const item = document.createElement('div');
-    item.className = 'bookmark-item' + (index === selectedIndex ? ' selected' : '');
-    // item.style.cssText = `
-    //   padding: 8px 12px;
-    //   cursor: pointer;
-    //   transition: box-shadow 0.2s, background-color 0.2s, border 0.2s;
-    //   border: 2px solid transparent; // 默认边框透明
-    // `;
+    item.className = 'gs-bm-item' + (i === selectedIndex ? ' selected' : '');
 
-    // 选中时的样式
-    if (index === selectedIndex) {
-      item.style.boxShadow = '0 0 10px rgba(4, 109, 223, 1)'; // 蓝色发光边框
-      item.style.border = '2px solid #046DDF'; // 选中时的边框颜色
-      item.style.backgroundColor = 'rgba(4, 109, 223, 0.1)'; // 选中时的背景色
+    const img = document.createElement('img');
+    img.src = getFavicon(bm.url);
+    img.onerror = () => { img.style.display = 'none'; };
 
-      // 添加提示
-      const hint = document.createElement('div');
-      hint.className = 'bookmark-hint';
-      hint.textContent = '按Enter打开';
-      hint.style.cssText = `
-        font-size: 12px;
-        color: #046DDF; // 使用边框颜色
-        margin-top: 4px;
-        font-weight: bold; // 加粗提示
-      `;
-      item.appendChild(hint);
-    }
-
-    const content = document.createElement('div');
-    content.className = 'bookmark-content';
+    const info = document.createElement('div');
+    info.className = 'gs-bm-info';
 
     const title = document.createElement('div');
-    title.className = 'bookmark-title';
-    title.textContent = bookmark.title;
-    title.style.cssText = `
-      font-weight: 500;
-      margin-bottom: 4px;
-    `;
+    title.className = 'gs-bm-title';
+    title.textContent = bm.title;
 
     const url = document.createElement('div');
-    url.className = 'bookmark-url';
-    url.textContent = bookmark.url;
-    url.style.cssText = `
-      font-size: 12px;
-      color: #666;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 100%;
-      display: block;
-    `;
+    url.className = 'gs-bm-url';
+    url.textContent = bm.url;
 
-    content.appendChild(title);
-    content.appendChild(url);
-    item.appendChild(content);
+    info.appendChild(title);
+    info.appendChild(url);
+    item.appendChild(img);
+    item.appendChild(info);
+
+    if (i === selectedIndex) {
+      const enter = document.createElement('span');
+      enter.className = 'gs-bm-enter';
+      enter.textContent = 'Enter';
+      item.appendChild(enter);
+    }
 
     item.addEventListener('click', () => {
-      if (bookmark.url) {
-        window.open(bookmark.url, '_blank', 'noopener,noreferrer');
-      }
-    });
-
-    // 添加悬浮效果
-    item.addEventListener('mouseenter', () => {
-      item.style.boxShadow = '0 0 10px rgba(4, 109, 223, 1)'; // 悬浮时的发光边框
-      item.style.border = '2px solid #046DDF'; // 悬浮时的边框颜色
-    });
-
-    item.addEventListener('mouseleave', () => {
-      if (index !== selectedIndex) {
-        item.style.boxShadow = ''; // 恢复边框
-        item.style.border = '2px solid transparent'; // 恢复边框透明
+      if (bm.url) {
+        window.open(bm.url, '_blank', 'noopener,noreferrer');
+        hideDropdown();
+        if (animateHide) animateHide();
       }
     });
 
@@ -465,484 +376,475 @@ const updateBookmarkResults = (results, selectedIndex = -1) => {
 
   if (results.length > 5) {
     const more = document.createElement('div');
-    more.className = 'more-results';
-    more.textContent = `还有 ${results.length - 5} 个结果未显示`;
-    more.style.cssText = `
-      padding: 8px 12px;
-      text-align: center;
-      color: #666;
-      font-size: 12px;
-    `;
+    more.className = 'gs-more';
+    more.textContent = `另有 ${results.length - 5} 条结果`;
     container.appendChild(more);
   }
+}
+
+// ─── 搜索建议 ─────────────────────────────────────────────
+async function fetchSuggestions(query, engineKey) {
+  if (!query || query.length < 1) { if (dropdownMode === 'suggestions') hideDropdown(); return; }
+  if (!isExtensionEnvironment) return;
+
+  // 标记旧请求为取消（替代 AbortController，因为现在走 sendMessage）
+  if (suggestAbortCtrl) suggestAbortCtrl._cancelled = true;
+  const ctrl = { _cancelled: false };
+  suggestAbortCtrl = ctrl;
+
+  let url = '';
+  if      (['bd','baidu'].includes(engineKey))  url = `https://www.baidu.com/sugrec?prod=pc&wd=${encodeURIComponent(query)}`;
+  else if (['gg','google'].includes(engineKey)) url = `https://www.google.com/complete/search?client=chrome&q=${encodeURIComponent(query)}`;
+  else if (['bi','bing'].includes(engineKey))   url = `https://api.bing.com/qsonhs.aspx?type=cb&q=${encodeURIComponent(query)}`;
+  else { hideDropdown(); return; }
+
+  try {
+    // 由 background service worker 代理 fetch（绕过 content script 的 CORS 限制）
+    const resp = await chrome.runtime.sendMessage({ action: 'FETCH_SUGGESTIONS', url });
+    if (ctrl._cancelled) return;
+    if (!resp?.success) throw new Error(resp?.error || 'fetch failed');
+
+    const data = resp.data;
+    let results = [];
+    if      (['bd','baidu'].includes(engineKey))  results = (data.g || []).map(i => i.q).filter(Boolean);
+    else if (['gg','google'].includes(engineKey)) results = data[1] || [];
+    else if (['bi','bing'].includes(engineKey))   results = data.AS?.Results?.[0]?.Suggests?.map(s => s.Txt) || [];
+
+    currentSuggestions      = results.slice(0, 8);
+    selectedSuggestionIndex = -1;
+    if (currentSuggestions.length > 0) showDropdown('suggestions');
+    else if (dropdownMode === 'suggestions') hideDropdown();
+  } catch (e) {
+    if (!ctrl._cancelled) console.error('Suggestion fetch error:', e);
+  }
+}
+
+function renderSuggestions(container) {
+  currentSuggestions.forEach((sug, i) => {
+    const item = document.createElement('div');
+    item.className = 'gs-sug-item' + (i === selectedSuggestionIndex ? ' selected' : '');
+
+    const text = document.createElement('span');
+    text.className = 'gs-sug-text';
+    if (currentSearchQuery) {
+      const rx = new RegExp(`(${escapeRegex(currentSearchQuery)})`, 'gi');
+      // 已输入部分变灰，未输入部分正常色，突出补全内容
+      text.innerHTML = sug.replace(rx, '<span class="gs-sug-hl">$1</span>');
+    } else {
+      text.textContent = sug;
+    }
+    item.appendChild(text);
+
+    if (i === selectedSuggestionIndex) {
+      const hint = document.createElement('span');
+      hint.className = 'gs-sug-enter';
+      hint.textContent = '↵';
+      item.appendChild(hint);
+    }
+
+    item.addEventListener('mouseenter', () => {
+      selectedSuggestionIndex = i;
+      container.querySelectorAll('.gs-sug-item').forEach((el, idx) => {
+        el.classList.toggle('selected', idx === i);
+      });
+    });
+
+    item.addEventListener('click', () => {
+      const input = document.getElementById('gs-input');
+      jumpTo(parseInputQuery(input?.value || '').engineKey, sug);
+      if (input) input.value = '';
+      hideDropdown();
+      selectedSuggestionIndex = -1;
+      if (animateHide) animateHide();
+    });
+
+    container.appendChild(item);
+  });
+}
+
+const scrollToSelectedSuggestion = () => {
+  const dropdown = document.getElementById('gs-dropdown');
+  const sel = dropdown?.querySelector('.gs-sug-item.selected');
+  if (!dropdown || !sel) return;
+  const dr = dropdown.getBoundingClientRect(), sr = sel.getBoundingClientRect();
+  if (sr.top < dr.top) dropdown.scrollTop -= dr.top - sr.top;
+  else if (sr.bottom > dr.bottom) dropdown.scrollTop += sr.bottom - dr.bottom;
 };
 
-let selectedBookmarkIndex = -1;
-let currentBookmarkResults = [];
+// ─── 下拉显示/隐藏 ───────────────────────────────────────
+function showDropdown(mode, results, selectedIndex) {
+  dropdownMode = mode;
+  let divider  = document.getElementById('gs-divider');
+  let dropdown = document.getElementById('gs-dropdown');
+  if (!divider || !dropdown) return;
 
+  divider.style.display  = 'block';
+  dropdown.style.display = 'block';
+  dropdown.innerHTML     = '';
+
+  if (mode === 'engines')     renderEngines(dropdown);
+  if (mode === 'bookmarks')   renderBookmarks(dropdown, results ?? currentBookmarkResults, selectedIndex ?? selectedBookmarkIndex);
+  if (mode === 'suggestions') renderSuggestions(dropdown);
+}
+
+function hideDropdown() {
+  dropdownMode = null;
+  const divider  = document.getElementById('gs-divider');
+  const dropdown = document.getElementById('gs-dropdown');
+  if (divider)  divider.style.display  = 'none';
+  if (dropdown) dropdown.style.display = 'none';
+}
+
+// ─── 更新引擎按钮图标 ─────────────────────────────────────
+function updateEngineBtn() {
+  const btn    = document.getElementById('gs-engine-btn');
+  if (!btn) return;
+  const engine = jumpToData.get(defaultKey);
+  if (!engine) return;
+
+  btn.innerHTML = '';
+  const img = document.createElement('img');
+  img.src     = getFavicon(engine.jumpUrl);
+  img.onerror = () => {
+    img.remove();
+    const fb = document.createElement('div');
+    fb.className   = 'gs-fallback';
+    fb.textContent = defaultKey.toUpperCase();
+    btn.appendChild(fb);
+  };
+  btn.appendChild(img);
+}
+
+// ─── 收藏夹搜索 ──────────────────────────────────────────
+async function searchBookmarks(query) {
+  try {
+    const cached = await storage.get('cachedBookmarks');
+    if (!cached) return [];
+    const bookmarks  = JSON.parse(cached);
+    const lowerQuery = query.toLowerCase();
+    return bookmarks.filter(b =>
+      b.title?.toLowerCase().includes(lowerQuery) ||
+      b.url?.toLowerCase().includes(lowerQuery)
+    ).slice(0, 5);
+  } catch (e) {
+    console.error('搜索失败:', e);
+    return [];
+  }
+}
+
+// ─── 键盘导航（收藏夹） ──────────────────────────────────
 const handleKeyNavigation = (e) => {
-  if (!document.getElementById('bookmark-results')?.style.display === 'block') return;
+  if (dropdownMode !== 'bookmarks') return;
+  const max = Math.min(currentBookmarkResults.length - 1, 4);
 
-  const maxIndex = Math.min(currentBookmarkResults.length - 1, 4);
-
-  switch (e.key) {
-    case 'ArrowUp':
-      e.preventDefault();
-      if (selectedBookmarkIndex <= 0) {
-        selectedBookmarkIndex = maxIndex;
-      } else {
-        selectedBookmarkIndex--;
-      }
-      updateBookmarkResults(currentBookmarkResults, selectedBookmarkIndex);
-      scrollToSelected();
-      break;
-    case 'ArrowDown':
-      e.preventDefault();
-      if (selectedBookmarkIndex >= maxIndex) {
-        selectedBookmarkIndex = 0;
-      } else {
-        selectedBookmarkIndex++;
-      }
-      updateBookmarkResults(currentBookmarkResults, selectedBookmarkIndex);
-      scrollToSelected();
-      break;
-    case 'Enter':
-      e.preventDefault();
-      if (selectedBookmarkIndex >= 0 && currentBookmarkResults[selectedBookmarkIndex]?.url) {
-        window.open(currentBookmarkResults[selectedBookmarkIndex].url, '_blank', 'noopener,noreferrer');
-      }
-      break;
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    selectedBookmarkIndex = selectedBookmarkIndex <= 0 ? max : selectedBookmarkIndex - 1;
+    showDropdown('bookmarks');
+    scrollToSelected();
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    selectedBookmarkIndex = selectedBookmarkIndex >= max ? 0 : selectedBookmarkIndex + 1;
+    showDropdown('bookmarks');
+    scrollToSelected();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (selectedBookmarkIndex >= 0 && currentBookmarkResults[selectedBookmarkIndex]?.url) {
+      window.open(currentBookmarkResults[selectedBookmarkIndex].url, '_blank', 'noopener,noreferrer');
+      hideDropdown();
+      if (animateHide) animateHide();
+    }
   }
 };
 
 const scrollToSelected = () => {
-  const container = document.getElementById('bookmark-results');
-  const selectedItem = container?.querySelector('.bookmark-item.selected');
-
-  if (container && selectedItem) {
-    const containerRect = container.getBoundingClientRect();
-    const itemRect = selectedItem.getBoundingClientRect();
-
-    if (itemRect.top < containerRect.top) {
-      container.scrollTop -= (containerRect.top - itemRect.top);
-    } else if (itemRect.bottom > containerRect.bottom) {
-      container.scrollTop += (itemRect.bottom - containerRect.bottom);
-    }
-  }
+  const dropdown = document.getElementById('gs-dropdown');
+  const selected = dropdown?.querySelector('.gs-bm-item.selected');
+  if (!dropdown || !selected) return;
+  const dr = dropdown.getBoundingClientRect();
+  const sr = selected.getBoundingClientRect();
+  if (sr.top < dr.top)       dropdown.scrollTop -= dr.top - sr.top;
+  else if (sr.bottom > dr.bottom) dropdown.scrollTop += sr.bottom - dr.bottom;
 };
 
-// 修改搜索框创建函数
+// ─── 创建搜索容器 ─────────────────────────────────────────
+let animateHide;
+
 const createSearchContainer = () => {
-  if (document.getElementById('global-search-extension')) {
-    return document.getElementById('global-search-extension');
-  }
+  if (document.getElementById('gs-overlay')) return null;
 
-  const container = document.createElement('div');
-  container.id = 'global-search-extension';
+  // 覆盖层
+  const overlay = document.createElement('div');
+  overlay.id = 'gs-overlay';
 
-  const searchBox = document.createElement('div');
-  searchBox.id = 'global-search-box';
+  // 卡片
+  const box = document.createElement('div');
+  box.id = 'gs-box';
 
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.id = 'global-search-input';
-  input.placeholder = '输入搜索内容...';
-  input.autofocus = true;
+  // 输入行
+  const inputRow = document.createElement('div');
+  inputRow.id = 'gs-input-row';
 
-  searchHint = document.createElement('div');
-  searchHint.id = 'global-search-hint';
-
-  const bookmarkResults = createBookmarkResults();
-  const searchStatus = document.createElement('div');
-  searchStatus.id = 'search-status';
-  const enginesList = document.createElement('div');
-  enginesList.id = 'search-engines-list';
-
-  searchBox.appendChild(searchHint);
-  searchBox.appendChild(input);
-  searchBox.appendChild(bookmarkResults);
-  searchBox.appendChild(searchStatus);
-  searchBox.appendChild(enginesList);
-  container.appendChild(searchBox);
-
-  container.addEventListener('click', (e) => {
-    if (e.target === container) {
-      animateHide();
-    }
+  // 引擎图标按钮
+  const engineBtn = document.createElement('button');
+  engineBtn.id   = 'gs-engine-btn';
+  engineBtn.type = 'button';
+  engineBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (dropdownMode === 'engines') hideDropdown();
+    else showDropdown('engines');
   });
 
-  // 修改输入事件监听
+  // 搜索输入
+  const input = document.createElement('input');
+  input.id          = 'gs-input';
+  input.type        = 'text';
+  input.placeholder = '输入搜索内容...';
+  input.autocomplete = 'off';
+
+  // Esc 提示
+  const escHint = document.createElement('span');
+  escHint.id          = 'gs-esc-hint';
+  escHint.textContent = 'esc';
+
+  inputRow.appendChild(engineBtn);
+  inputRow.appendChild(input);
+  inputRow.appendChild(escHint);
+
+  // 分隔线（默认隐藏）
+  const divider = document.createElement('div');
+  divider.id             = 'gs-divider';
+  divider.className      = 'gs-divider';
+  divider.style.display  = 'none';
+
+  // 下拉区域（默认隐藏）
+  const dropdown = document.createElement('div');
+  dropdown.id           = 'gs-dropdown';
+  dropdown.style.display = 'none';
+
+  box.appendChild(inputRow);
+  box.appendChild(divider);
+  box.appendChild(dropdown);
+  overlay.appendChild(box);
+
+  // 点击覆盖层背景关闭
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) _hide();
+  });
+
+  // 输入事件
   input.addEventListener('input', async (e) => {
     const value = e.target.value.trim();
 
-    // 重置搜索状态
-    selectedBookmarkIndex = -1;
-    currentBookmarkResults = [];
+    selectedBookmarkIndex   = -1;
+    currentBookmarkResults  = [];
+    selectedSuggestionIndex = -1;
 
-    // 处理收藏夹搜索
+    if (!value) { hideDropdown(); return; }
+
+    // 收藏夹搜索 (* 前缀)
     if (value.startsWith('*')) {
-      const searchQuery = value.slice(1).trim();
-
-      if (searchQuery) {
-        try {
-          currentBookmarkResults = await searchBookmarks(searchQuery);
-          updateBookmarkResults(currentBookmarkResults);
-          updateSearchHint(`搜索收藏夹: ${searchQuery}`);
-
-          const bookmarkResults = document.getElementById('bookmark-results');
-          if (bookmarkResults) {
-            bookmarkResults.style.display = 'block';
-          }
-        } catch (e) {
-          console.error('Error searching bookmarks:', e);
-          updateSearchHint('搜索收藏夹失败');
-        }
-      } else {
-        updateSearchHint('请输入要搜索的收藏夹内容');
-        const bookmarkResults = document.getElementById('bookmark-results');
-        if (bookmarkResults) {
-          bookmarkResults.style.display = 'none';
-        }
-      }
+      if (suggestTimer) clearTimeout(suggestTimer);
+      const q = value.slice(1).trim();
+      if (q) { currentBookmarkResults = await searchBookmarks(q); showDropdown('bookmarks'); }
+      else hideDropdown();
       return;
     }
 
-    // 处理搜索引擎切换
-    if (value === 'cd') {
-      showEnginesList();
-      updateSearchHint('请选择要切换的搜索引擎');
+    // 引擎切换 (cd / cd <key>)
+    if (value === 'cd' || value.startsWith('cd ')) {
+      if (suggestTimer) clearTimeout(suggestTimer);
+      showDropdown('engines');
       return;
     }
 
-    // 隐藏收藏夹搜索结果和搜索引擎列表
-    const bookmarkResults = document.getElementById('bookmark-results');
-    const enginesList = document.getElementById('search-engines-list');
-    if (bookmarkResults) bookmarkResults.style.display = 'none';
-    if (enginesList) enginesList.style.display = 'none';
-
-    // 原有的搜索逻辑
-    init();
-    updateSearchHint(`使用默认引擎 ${jumpToData.get(defaultKey).label} 搜索 | 输入 cd 查看可用搜索引擎`);
+    // 普通搜索：防抖获取建议
+    const { engineKey, query } = parseInputQuery(value);
+    currentSearchQuery = query;
+    if (suggestTimer) clearTimeout(suggestTimer);
+    if (query.length >= 1) {
+      suggestTimer = setTimeout(() => fetchSuggestions(query, engineKey), 220);
+    } else {
+      hideDropdown();
+    }
   });
 
-  // 添加键盘事件监听
+  // 键盘事件
   input.addEventListener('keydown', (e) => {
-    if (e.target.value.trim().startsWith('*')) {
+    // 收藏夹导航
+    if (input.value.trim().startsWith('*')) {
       handleKeyNavigation(e);
-      if (e.key === 'Enter' && !currentBookmarkResults.length) {
-        e.preventDefault();
-      }
+      if (e.key === 'Enter' && !currentBookmarkResults.length) e.preventDefault();
       return;
+    }
+
+    // 搜索建议导航
+    if (dropdownMode === 'suggestions' && currentSuggestions.length > 0) {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const len = currentSuggestions.length;
+        if (e.key === 'ArrowUp') {
+          selectedSuggestionIndex = selectedSuggestionIndex <= 0 ? len - 1 : selectedSuggestionIndex - 1;
+        } else {
+          selectedSuggestionIndex = selectedSuggestionIndex >= len - 1 ? 0 : selectedSuggestionIndex + 1;
+        }
+        // 填充输入框（不触发 input 事件）
+        input.value = currentSuggestions[selectedSuggestionIndex];
+        // 仅更新选中样式，不重新请求
+        document.querySelectorAll('#gs-dropdown .gs-sug-item').forEach((el, i) => {
+          el.classList.toggle('selected', i === selectedSuggestionIndex);
+          if (i === selectedSuggestionIndex) {
+            let hint = el.querySelector('.gs-sug-enter');
+            if (!hint) { hint = document.createElement('span'); hint.className = 'gs-sug-enter'; hint.textContent = '↵'; el.appendChild(hint); }
+          } else {
+            el.querySelector('.gs-sug-enter')?.remove();
+          }
+        });
+        scrollToSelectedSuggestion();
+        return;
+      }
     }
 
     if (e.key === 'Enter' && input.value.trim()) {
       const content = input.value.trim();
-      if (content.startsWith("/")) {
-        jumpTo(defaultKey, content.slice(1));
-      } else if (content.includes(" ")) {
-        let contentFAndR = segmentationContent(" ", content);
-        jumpTo(contentFAndR[0], contentFAndR[1]);
+      // cd 切换引擎：执行后保持弹窗打开，方便继续搜索
+      const parts = content.split(' ');
+      const isCd  = parts[0] === 'cd' && parts.length <= 2;
+
+      if (dropdownMode === 'suggestions' && selectedSuggestionIndex >= 0 && currentSuggestions[selectedSuggestionIndex]) {
+        jumpTo(parseInputQuery(input.value).engineKey, currentSuggestions[selectedSuggestionIndex]);
       } else {
-        jumpTo(defaultKey, content);
+        if (content.startsWith('/')) jumpTo(defaultKey, content.slice(1));
+        else if (content.includes(' ')) { const [a, b] = segmentationContent(' ', content); jumpTo(a, b); }
+        else jumpTo(defaultKey, content);
       }
       input.value = '';
-      updateSearchStatus(`使用默认引擎 ${jumpToData.get(defaultKey).label} 搜索 | 输入 cd 查看可用搜索引擎`);
-      hideEnginesList();
+      hideDropdown();
+      selectedSuggestionIndex = -1;
+      // cd 时不关闭弹窗，其余搜索执行后关闭
+      if (!isCd) _hide();
     } else if (e.key === 'Escape') {
-      hideEnginesList();
-      if (document.getElementById('global-search-extension').style.display === 'flex') {
-        animateHide();
-      }
+      _hide();
     }
   });
 
-  return {
-    container,
-    input,
-    searchBox,
-    animateShow: () => {
-      container.style.display = 'flex';
-      container.offsetHeight;
-      container.classList.add('show');
-      searchBox.classList.add('show');
-      input.classList.add('show');
-      searchHint.classList.add('show');
-      setTimeout(() => {
-        input.focus();
-        input.select();
-      }, 50);
-    },
-    animateHide: () => {
-      container.classList.remove('show');
-      searchBox.classList.remove('show');
-      input.classList.remove('show');
-      searchHint.classList.remove('show');
-      setTimeout(() => {
-        container.style.display = 'none';
-        input.value = '';
-        const bookmarkResults = document.getElementById('bookmark-results');
-        const enginesList = document.getElementById('search-engines-list');
-        if (bookmarkResults) bookmarkResults.style.display = 'none';
-        if (enginesList) enginesList.style.display = 'none';
-      }, 300);
-    }
+  // 阻止卡片内部点击冒泡到覆盖层
+  box.addEventListener('click', (e) => e.stopPropagation());
+
+  const _show = () => {
+    overlay.style.display = 'flex';
+    overlay.offsetHeight; // force reflow
+    overlay.classList.add('show');
+    box.classList.add('show');
+    updateEngineBtn();
+    setTimeout(() => { input.focus(); input.select(); }, 40);
   };
+
+  animateHide = _hide;
+  function _hide() {
+    overlay.classList.remove('show');
+    box.classList.remove('show');
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      input.value = '';
+      hideDropdown();
+    }, 220);
+  }
+
+  return { overlay, show: _show, hide: _hide };
 };
+
+// ─── 显示搜索框 ──────────────────────────────────────────
+let searchElements = null;
 
 const showSearchBox = () => {
-  let container = document.getElementById('global-search-extension');
-  if (!container) {
-    const elements = createSearchContainer();
-    if (document.body) {
-      document.body.appendChild(elements.container);
-      container = elements.container;
-      // 显示默认搜索引擎信息
-      const defaultEngine = jumpToData.get(defaultKey);
-      updateSearchStatus(`当前使用 ${defaultEngine.label} (${defaultEngine.key.join('/')}) | 输入 cd 切换搜索引擎`);
-      hideEnginesList();
-      elements.animateShow();
-      const input = document.getElementById('global-search-input');
-      if (input) {
-        setTimeout(() => {
-          input.focus();
-        }, 50);
-      }
-    }
-  } else {
-    container.style.display = 'flex';
-    container.offsetHeight;
-    container.classList.add('show');
-    const searchBox = document.getElementById('global-search-box');
-    const input = document.getElementById('global-search-input');
-    if (searchBox) searchBox.classList.add('show');
-    if (input) {
-      input.classList.add('show');
-      input.focus();
-      // 清空输入框并显示默认搜索引擎信息
-      input.value = '';
-      const defaultEngine = jumpToData.get(defaultKey);
-      updateSearchStatus(`当前使用 ${defaultEngine.label} (${defaultEngine.key.join('/')}) | 输入 cd 查看可用搜索引擎`);
-      hideEnginesList();
+  if (!searchElements) {
+    searchElements = createSearchContainer();
+    if (searchElements && document.body) {
+      document.body.appendChild(searchElements.overlay);
     }
   }
+  if (searchElements) searchElements.show();
 };
 
+// ─── 全局 Escape ─────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    init();
-    const container = document.getElementById('global-search-extension');
-    const searchBox = document.getElementById('global-search-box');
-    const input = document.getElementById('global-search-input');
-    const hint = document.getElementById('global-search-hint');
-
-    if (container && container.style.display === 'flex') {
+    const overlay = document.getElementById('gs-overlay');
+    if (overlay && overlay.style.display === 'flex') {
       e.preventDefault();
-      container.classList.remove('show');
-      if (searchBox) searchBox.classList.remove('show');
-      if (input) input.classList.remove('show');
-      if (hint) hint.classList.remove('show');
-
-      setTimeout(() => {
-        container.style.display = 'none';
-      }, 300);
+      if (animateHide) animateHide();
     }
   }
 });
 
-// 修改消息监听部分
+// ─── 消息监听 ────────────────────────────────────────────
 if (isExtensionEnvironment) {
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((request) => {
     if (request.action === 'SHOW_SEARCH') {
       showSearchBox();
     } else if (request.action === 'UPDATE_JUMP_DATA') {
-      // 更新搜索引擎数据
-      jumpData = request.data;
-      // 重新初始化 jumpToData Map
+      jumpData   = request.data;
       jumpToData = new Map();
-      jumpData.forEach(data => {
-        data.key.forEach(key => {
-          jumpToData.set(key, data);
-        });
-      });
-      // 更新搜索提示
-      updateSearchHint(`使用默认引擎 ${jumpToData.get(defaultKey).label} 搜索 | 输入 cd 查看可用搜索引擎`);
-      // 更新状态显示
-      const input = document.getElementById('global-search-input');
-      if (input) {
-        const defaultEngine = jumpToData.get(defaultKey);
-        updateSearchStatus(`当前使用 ${defaultEngine.label} (${defaultEngine.key.join('/')}) | 输入 cd 切换搜索引擎`);
-      }
+      jumpData.forEach(d => d.key.forEach(k => jumpToData.set(k, d)));
+      updateEngineBtn();
     }
   });
 }
 
-// 初始化代码
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    if (isExtensionEnvironment) {
-      createSearchContainer();
+// ─── 跳转 ────────────────────────────────────────────────
+async function jumpTo(jumpType, toData) {
+  if (!jumpType) jumpType = defaultKey;
+  if (jumpType === 'cd') {
+    if (jumpToData.has(toData)) {
+      defaultKey = toData;
+      await storage.set('defaultKey', toData);
+      updateEngineBtn();
     }
-  });
-} else {
-  if (isExtensionEnvironment) {
-    createSearchContainer();
+    return;
+  }
+  const engine = jumpToData.get(jumpType);
+  if (engine) {
+    window.open(engine.jumpUrl.replace('&<query>', toData), '_blank', 'noopener,noreferrer');
+  } else {
+    const def = jumpToData.get(defaultKey);
+    if (def) window.open(def.jumpUrl.replace('&<query>', jumpType + toData), '_blank', 'noopener,noreferrer');
   }
 }
 
-function updateSearchHint(message) {
-  try {
-    const hint = document.getElementById('global-search-hint');
-    if (hint) {
-      hint.textContent = message;
-      hint.classList.add('show');
-    }
-  } catch (e) {
-    console.error('Update search hint error:', e);
-  }
-}
-
+// ─── 初始化 ──────────────────────────────────────────────
 async function init() {
-  try {
-    // 使用统一的存储接口获取数据
-    const savedDefaultKey = await storage.get('defaultKey');
-    const savedJumpData = await storage.get('jumpData');
-
-    // 只有在没有数据时才使用默认值
-    defaultKey = savedDefaultKey || 'bd';
-    jumpData = JSON.parse(savedJumpData || JSON.stringify(defaultJumpData));
-
-    if (!savedDefaultKey) {
-      await storage.set('defaultKey', 'bd');
-    }
-
-    if (!savedJumpData) {
-      await storage.set('jumpData', JSON.stringify(defaultJumpData));
-    }
-
-    // 初始化 jumpToData Map
+  const buildMap = () => {
     jumpToData = new Map();
-    jumpData.forEach(data => {
-      data.key.forEach(key => {
-        jumpToData.set(key, data);
-      });
-    });
+    jumpData.forEach(d => d.key.forEach(k => jumpToData.set(k, d)));
+  };
+  try {
+    const savedKey  = await storage.get('defaultKey');
+    const savedData = await storage.get('jumpData');
 
-    // 更新搜索提示
-    updateSearchHint(`使用默认引擎 ${jumpToData.get(defaultKey).label} 搜索 | 输入 cd 查看可用搜索引擎`);
+    defaultKey = savedKey || 'bd';
+
+    // chrome.storage 直接存原生对象（数组），localStorage 存 JSON 字符串，需兼容两种格式
+    if (Array.isArray(savedData)) {
+      jumpData = savedData;
+    } else if (typeof savedData === 'string') {
+      try { jumpData = JSON.parse(savedData); } catch { jumpData = defaultJumpData; }
+    } else {
+      jumpData = defaultJumpData;
+    }
+
+    if (!savedKey)  await storage.set('defaultKey', 'bd');
+    if (!savedData) await storage.set('jumpData', defaultJumpData);
+
+    buildMap();
   } catch (e) {
+    // 兜底：保证 jumpToData 始终可用
+    jumpData = defaultJumpData;
+    buildMap();
     console.error('Content script init error:', e);
   }
 }
 
-function segmentationContent(medium, content) {
-  const [firstPart, ...restParts] = content.split(medium);
-  const remaining = restParts.join(' ');
-  return [firstPart, remaining];
-}
-
-async function jumpTo(jumpType, toData) {
-  if (jumpType == null || jumpType == "") {
-    jumpType = defaultKey;
-  }
-  if (jumpType == "cd") {
-    const jumpData = jumpToData.get(toData);
-    if (jumpData != null) {
-      defaultKey = toData;
-      await storage.set('defaultKey', toData);
-    }
-    return;
-  }
-  const jumpData = jumpToData.get(jumpType);
-  if (jumpData != null) {
-    const toUrl = jumpData.jumpUrl.replace("&<query>", toData);
-    window.open(toUrl, "_blank", "noopener,noreferrer")
-  } else {
-    const data = jumpType + toData;
-    const toUrl = jumpToData.get(defaultKey).jumpUrl.replace("&<query>", data);
-    window.open(toUrl, "_blank", "noopener,noreferrer");
-  }
-}
-
-// 修改搜索引擎列表显示函数
-function showEnginesList() {
-  const enginesList = document.getElementById('search-engines-list');
-  if (!enginesList) return;
-
-  enginesList.innerHTML = '';
-  enginesList.style.display = 'block';
-
-  // 按搜索引擎分组显示
-  jumpData.forEach(engine => {
-    const item = document.createElement('div');
-    item.className = 'engine-item';
-    item.style.cssText = `
-      padding: 10px 16px;
-      border-radius: 8px;
-      background: rgba(0, 0, 0, 0.05);
-      cursor: pointer;
-      transition: all 0.2s ease;
-      margin-bottom: 8px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      color: #000000 !important;
-    `;
-
-    const engineInfo = document.createElement('div');
-    engineInfo.className = 'engine-keys'
-    engineInfo.textContent = engine.label;
-
-    const engineKeys = document.createElement('div');
-    engineKeys.className = 'engine-keys';
-    engineKeys.textContent = engine.key.join(' / ');
-
-    item.appendChild(engineInfo);
-    item.appendChild(engineKeys);
-
-    item.addEventListener('click', () => {
-      const input = document.getElementById('global-search-input');
-      if (input) {
-        input.value = `cd ${engine.key[0]}`;
-        input.focus();
-        updateSearchStatus(`将切换到 ${engine.label} (${engine.key.join('/')})`);
-      }
-    });
-
-    enginesList.appendChild(item);
-  });
-}
-
-// 修改隐藏搜索引擎列表函数
-function hideEnginesList() {
-  const enginesList = document.getElementById('search-engines-list');
-  if (enginesList) {
-    enginesList.style.display = 'none';
-  }
-}
-
-// 在初始化时设置默认提示
-function initSearchHint() {
-  const defaultEngine = jumpToData.get(defaultKey);
-  if (defaultEngine) {
-    updateSearchHint(`使用默认引擎 ${defaultEngine.label} 搜索 | 输入 cd 查看可用搜索引擎`);
-  }
-}
-
-// 添加隐藏状态显示的函数
-function hideSearchStatus() {
-  const status = document.getElementById('search-status');
-  if (status) {
-    status.style.display = 'none';
-  }
-}
-
-// 修改更新状态显示的函数
-function updateSearchStatus(message) {
-  const status = document.getElementById('search-status');
-  if (status) {
-    status.style.display = 'block';
-    status.textContent = message;
-  }
-}
-
 init();
+
+} // end of window.__gsExtInit guard

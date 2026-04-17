@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "INIT",
-  "version": "0.0.1",
-  "description": "简单的标签页,获取可以玩一些骚操作",
+  "version": "0.0.2",
+  "description": "简单的标签页",
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
@@ -55,6 +55,11 @@
       "description": "打开全局搜索"
     }
   },
+  "host_permissions": [
+    "https://www.baidu.com/*",
+    "https://www.google.com/*",
+    "https://api.bing.com/*"
+  ],
   "action": {
     "default_title": "INIT"
   }

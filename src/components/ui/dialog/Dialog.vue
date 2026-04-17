@@ -11,6 +11,7 @@ onMounted(() => {
 const props = defineProps<{
   show: boolean;
   select: any[];
+  title?: string;
 }>();
 
 const emit = defineEmits<{
@@ -36,24 +37,38 @@ function setUpClick(select: string) {
   <Transition name="dialog">
     <div v-if="show" class="dialog-overlay" @click="handleClose">
       <div class="dialog-content" @click.stop>
-        <div class="w-[20%] h-[100%] border-r-1 border-[#B2B2B2] select-none px-2 dark:border-[#000000]">
-          <div class="h-[10%] flex flex-row items-center">
-            <Icon @click="handleClose" icon="fluent-color:dismiss-circle-48" class="text-2xl cursor-pointer ml-2">
-            </Icon>
+        <!-- 左侧导航栏 -->
+        <div class="sidebar">
+          <!-- 头部：标题 + 关闭按钮 -->
+          <div class="sidebar-header">
+            <span class="sidebar-title">{{ props.title || '设置' }}</span>
+            <Icon
+              @click="handleClose"
+              icon="fluent-color:dismiss-circle-48"
+              class="text-xl cursor-pointer hover:opacity-70 transition-opacity"
+            />
           </div>
-          <div v-for="(select, index) in select" :key="index"
-            class="flex flex-row content-center items-center w-[100%] p-1.5 rounded-xl text-gray-900 pl-[18%] mt-1 dark:text-white"
-            :style="currentSettingComponent.key == select.key ? { backgroundColor: '#006BDF', color: 'white' } : {}"
-            @click="setUpClick(select.key)">
-            <Icon :icon="select.icon"></Icon>
-            <span class="ml-2">{{ select.label }}</span>
-          </div>
+          <!-- 导航项 -->
+          <nav class="sidebar-nav">
+            <div
+              v-for="(select, index) in select"
+              :key="index"
+              class="nav-item"
+              :class="{ 'nav-item--active': currentSettingComponent.key === select.key }"
+              @click="setUpClick(select.key)"
+            >
+              <Icon :icon="select.icon" class="text-lg flex-shrink-0" />
+              <span class="nav-label">{{ select.label }}</span>
+            </div>
+          </nav>
         </div>
-        <div
-          class="w-[80%] h-[100%] bg-[color:rgba(255,255,255,0.5)] dark:bg-[color:rgba(30,30,30,0.5)] rounded-r-[12px] ">
-          <div class="h-[10%] border-b-1 border-[#B2B2B2] dark:text-white flex flex-row items-center pl-3 dark:border-[#000000]">{{
-            currentSettingComponent.label }}</div>
-          <component class="h-[90%] overflow-auto" :is="currentSettingComponent.in" />
+
+        <!-- 右侧内容区 -->
+        <div class="content-area">
+          <div class="content-header">
+            <span>{{ currentSettingComponent.label }}</span>
+          </div>
+          <component class="h-[calc(100%-44px)] overflow-auto" :is="currentSettingComponent.in" />
         </div>
       </div>
     </div>
@@ -63,11 +78,8 @@ function setUpClick(select: string) {
 <style scoped>
 .dialog-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.2);
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(20px);
   display: flex;
   justify-content: center;
@@ -76,136 +88,171 @@ function setUpClick(select: string) {
 }
 
 .dialog-content {
-  background-color: rgba(255, 255, 255, 0.5);
-  border-radius: 12px;
+  background-color: rgba(248, 249, 250, 0.85);
+  border-radius: 16px;
   width: 90%;
-  max-width: 900px;
-  height: 60vh;
-  max-height: 600px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: all 0.3s ease;
+  max-width: 860px;
+  height: 62vh;
+  max-height: 580px;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.15),
+    0 4px 12px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   display: flex;
   flex-direction: row;
   overflow: hidden;
+  transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
-/* 自定义滚动条样式 */
-.dialog-content {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-}
-
-.dialog-content::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.dialog-content::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 3px;
-}
-
-.dialog-content::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
-  transition: background-color 0.2s ease;
-}
-
-.dialog-content::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(0, 0, 0, 0.3);
-}
-
-/* 左侧菜单滚动条 */
-.w-\[20\%\] {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-  overflow-y: auto;
-}
-
-.w-\[20\%\]::-webkit-scrollbar {
-  width: 4px;
-}
-
-.w-\[20\%\]::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 2px;
-}
-
-.w-\[20\%\]::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.2);
-  border-radius: 2px;
-  transition: background-color 0.2s ease;
-}
-
-.w-\[20\%\]::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(0, 0, 0, 0.3);
-}
-
-/* 暗色模式下的滚动条样式 */
-@media (prefers-color-scheme: dark) {
-  .dialog-content {
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-  }
-
-  .dialog-content::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.2);
-  }
-
-  .dialog-content::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(255, 255, 255, 0.3);
-  }
-
-  .w-\[20\%\] {
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-  }
-
-  .w-\[20\%\]::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.2);
-  }
-
-  .w-\[20\%\]::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(255, 255, 255, 0.3);
-  }
-}
-
-.dialog-header {
-  padding-top: 20px;
-  padding-left: 20px;
-  padding-right: 20px;
+/* 左侧导航栏 */
+.sidebar {
+  width: 190px;
+  flex-shrink: 0;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  background-color: rgba(255, 255, 255, 0.4);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
+}
+
+.sidebar-header {
+  display: flex;
   align-items: center;
-  margin-bottom: 20px;
-  color: #1a1a1a;
+  justify-content: space-between;
+  padding: 16px 14px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   flex-shrink: 0;
 }
 
-.dialog-body {
+.sidebar-title {
+  font-size: 14px;
+  font-weight: 600;
   color: #1a1a1a;
+  letter-spacing: 0.01em;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #444;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  user-select: none;
+}
+
+.nav-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.nav-item--active {
+  background-color: #006BDF;
+  color: #fff;
+}
+
+.nav-item--active:hover {
+  background-color: #0060cc;
+}
+
+.nav-label {
+  font-weight: 500;
+}
+
+/* 右侧内容区 */
+.content-area {
   flex: 1;
-  overflow-y: auto;
-  padding-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  background-color: rgba(255, 255, 255, 0.5);
+  border-radius: 0 16px 16px 0;
+  overflow: hidden;
 }
 
-/* 深色模式下的样式 */
-@media(prefers-color-scheme: dark) {
+.content-header {
+  height: 44px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+
+/* 暗色模式 */
+@media (prefers-color-scheme: dark) {
   .dialog-content {
-    background-color: rgba(30, 30, 30, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(28, 28, 30, 0.88);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 20px 60px rgba(0, 0, 0, 0.4),
+      0 4px 12px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 
-  .dialog-header,
-  .dialog-body {
-    color: #ffffff;
+  .sidebar {
+    background-color: rgba(255, 255, 255, 0.04);
+    border-right-color: rgba(255, 255, 255, 0.06);
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  }
+
+  .sidebar::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .sidebar-header {
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .sidebar-title {
+    color: #f0f0f0;
+  }
+
+  .nav-item {
+    color: #bbb;
+  }
+
+  .nav-item:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: #fff;
+  }
+
+  .content-area {
+    background-color: rgba(255, 255, 255, 0.04);
+  }
+
+  .content-header {
+    color: #f0f0f0;
+    border-bottom-color: rgba(255, 255, 255, 0.06);
   }
 }
 
-/* 对话框动画 */
+/* 对话框入场/离场动画 */
 .dialog-enter-active,
 .dialog-leave-active {
-  transition: all 0.3s ease;
+  transition: opacity 0.25s ease;
 }
 
 .dialog-enter-from,
@@ -215,13 +262,13 @@ function setUpClick(select: string) {
 
 .dialog-enter-from .dialog-content,
 .dialog-leave-to .dialog-content {
-  transform: scale(0.95);
+  transform: scale(0.96) translateY(8px);
   opacity: 0;
 }
 
 .dialog-enter-to .dialog-content,
 .dialog-leave-from .dialog-content {
-  transform: scale(1);
+  transform: scale(1) translateY(0);
   opacity: 1;
 }
 </style>

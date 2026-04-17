@@ -1,589 +1,917 @@
 <template>
-  <div id="basic" class="rounded-r-[12px] p-8">
+  <div id="basic" class="rounded-r-[12px] p-6">
     <div class="space-y-6">
+
       <!-- 时间显示设置 -->
-      <div class="space-y-2 pb-4 border-b border-gray-200 dark:border-zinc-700">
-        <h3 class="text-sm font-medium mb-2">时间显示设置</h3>
-        <p class="text-xs text-gray-600 dark:text-zinc-400 mb-3">
-          自定义时间和日期的显示方式
-        </p>
-        
-        <div class="flex flex-col space-y-3">
-          <div class="flex items-center">
-            <input 
-              type="checkbox" 
-              id="show-time" 
-              v-model="showTimeValue"
-              class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+      <section class="setting-section">
+        <div class="section-head">
+          <h3 class="section-title">时间显示</h3>
+          <p class="section-desc">自定义时间和日期的显示方式</p>
+        </div>
+        <div class="toggle-list">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="showTimeValue" class="toggle-checkbox" />
+            <span class="toggle-label">显示时间</span>
+          </label>
+          <label class="toggle-row ml-6" :class="{ 'opacity-40': !showTimeValue }">
+            <input type="checkbox" v-model="showSecondsValue" :disabled="!showTimeValue" class="toggle-checkbox" />
+            <span class="toggle-label">显示秒数</span>
+          </label>
+          <label class="toggle-row ml-6" :class="{ 'opacity-40': !showTimeValue }">
+            <input type="checkbox" v-model="use24HourValue" :disabled="!showTimeValue" class="toggle-checkbox" />
+            <span class="toggle-label">24小时制</span>
+          </label>
+          <label class="toggle-row">
+            <input type="checkbox" v-model="showDateValue" class="toggle-checkbox" />
+            <span class="toggle-label">显示日期</span>
+          </label>
+        </div>
+      </section>
+
+      <div class="divider" />
+
+      <!-- 字体设置 -->
+      <section class="setting-section">
+        <div class="section-head">
+          <h3 class="section-title">时钟字体</h3>
+          <p class="section-desc">选择时间和日期的显示字体</p>
+        </div>
+        <div class="font-grid">
+          <button
+            v-for="f in fontOptions"
+            :key="f.value"
+            class="font-card"
+            :class="{ 'font-card--active': clockFontValue === f.value }"
+            @click="selectFont(f.value)"
+          >
+            <span class="font-preview" :style="{ fontFamily: `'${f.value}', sans-serif` }">14:32</span>
+            <span class="font-name">{{ f.label }}</span>
+          </button>
+        </div>
+      </section>
+
+      <div class="divider" />
+
+      <!-- 字体大小 & 粗细 -->
+      <section class="setting-section">
+        <div class="section-head">
+          <h3 class="section-title">字体大小 &amp; 粗细</h3>
+          <p class="section-desc">调整时间数字的视觉重量</p>
+        </div>
+
+        <!-- 大小滑块 -->
+        <div class="slider-row">
+          <span class="slider-label">大小</span>
+          <input
+            type="range"
+            class="size-slider"
+            :min="48" :max="160" :step="8"
+            v-model.number="clockFontSizeValue"
+            @input="onFontSizeChange"
+          />
+          <span class="slider-value">{{ clockFontSizeValue }}px</span>
+        </div>
+
+        <!-- 粗细滑块 -->
+        <div class="slider-row">
+          <span class="slider-label">粗细</span>
+          <input
+            type="range"
+            class="size-slider"
+            min="300" max="700" step="100"
+            v-model.number="clockFontWeightValue"
+            @change="onFontWeightChange"
+          />
+          <span class="slider-value" :style="{ fontWeight: clockFontWeightValue }">{{ weightLabel }}</span>
+        </div>
+
+        <!-- 恢复默认 -->
+        <button class="reset-btn" @click="resetToDefaults">
+          <Icon icon="fluent:arrow-reset-24-regular" class="text-xs" />
+          恢复默认
+        </button>
+
+        <!-- 实时预览 -->
+        <div class="size-preview">
+          <span
+            :style="{
+              fontFamily: `'${clockFontValue}', sans-serif`,
+              fontSize: clockFontSizeValue * 0.35 + 'px',
+              fontWeight: clockFontWeightValue,
+              color: '#1f2937',
+              lineHeight: 1,
+            }"
+          >14:32</span>
+        </div>
+      </section>
+
+      <div class="divider" />
+
+      <!-- 主色调设置 -->
+      <section class="setting-section">
+        <div class="section-head">
+          <h3 class="section-title">主色调</h3>
+          <p class="section-desc">设置时间和图标的颜色</p>
+        </div>
+
+        <!-- 自定义颜色开关 -->
+        <div class="toggle-list">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="useCustomColorValue" class="toggle-checkbox" @change="onCustomColorToggle" />
+            <span class="toggle-label">使用自定义颜色</span>
+          </label>
+          <p class="custom-color-hint" v-if="!useCustomColorValue">
+            当前使用自适应颜色：有壁纸/暗色模式显示白色，亮色模式显示深灰
+          </p>
+        </div>
+
+        <div class="color-row" v-if="useCustomColorValue">
+          <!-- 色块触发器 -->
+          <div class="swatch-wrapper" ref="swatchWrapperRef">
+            <button
+              class="color-swatch"
+              :style="{ backgroundColor: themeColorInput }"
+              @click="togglePicker"
+              title="点击选择颜色"
             />
-            <label for="show-time" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">
-              显示时间
-            </label>
+
+            <!-- 气泡框 -->
+            <Transition name="popover">
+              <div v-if="showPicker" class="color-popover" ref="popoverRef">
+                <!-- 色相条 -->
+                <div
+                  class="hue-bar"
+                  ref="themeHueBar"
+                  @click="selectThemeHue"
+                  @mousedown="startThemeHueDrag"
+                >
+                  <div
+                    class="hue-thumb"
+                    :style="{ left: `${themeHuePosition}%`, backgroundColor: themeHueColor }"
+                  />
+                </div>
+
+                <!-- 饱和度/亮度面板 -->
+                <div
+                  class="sb-panel"
+                  ref="themeSatBrightnessArea"
+                  :style="{
+                    backgroundColor: themeHueColor,
+                    backgroundImage: 'linear-gradient(to right, white, transparent), linear-gradient(to bottom, transparent, black)',
+                  }"
+                  @click="selectThemeSaturationBrightness"
+                  @mousedown="startThemeSatBrightDrag"
+                >
+                  <div
+                    class="sb-thumb"
+                    :style="{ left: `${themeSaturationPosition}%`, top: `${themeBrightnessPosition}%` }"
+                  />
+                </div>
+
+                <!-- 预设色 -->
+                <div class="preset-grid">
+                  <button
+                    v-for="color in presetColors"
+                    :key="color"
+                    class="preset-chip"
+                    :style="{ backgroundColor: color }"
+                    :class="{ 'preset-chip--active': themeColorInput === color }"
+                    @click="selectThemePresetColor(color)"
+                  />
+                </div>
+
+                <!-- Hex 输入 -->
+                <div class="hex-row">
+                  <span class="hex-label">HEX</span>
+                  <input
+                    v-model="themeColorInput"
+                    class="hex-input"
+                    placeholder="#495057"
+                    @blur="validateAndApplyThemeColor"
+                    @keydown.enter="validateAndApplyThemeColor"
+                    spellcheck="false"
+                  />
+                </div>
+              </div>
+            </Transition>
           </div>
 
-          <div class="flex items-center ml-7" :class="{ 'opacity-50': !showTimeValue }">
-            <input 
-              type="checkbox" 
-              id="show-seconds" 
-              v-model="showSecondsValue"
-              :disabled="!showTimeValue"
-              class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-            />
-            <label for="show-seconds" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">
-              显示秒数
-            </label>
+          <!-- 当前颜色 Hex 显示（只读，点击气泡里才能改） -->
+          <div class="hex-badge" :style="{ color: themeColorInput }">
+            {{ themeColorInput }}
           </div>
-          
-          <div class="flex items-center ml-7" :class="{ 'opacity-50': !showTimeValue }">
-            <input 
-              type="checkbox" 
-              id="use-24-hour" 
-              v-model="use24HourValue"
-              :disabled="!showTimeValue"
-              class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-            />
-            <label for="use-24-hour" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">
-              使用24小时制
-            </label>
-          </div>
-          
-          <div class="flex items-center">
-            <input 
-              type="checkbox" 
-              id="show-date" 
-              v-model="showDateValue"
-              class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-            />
-            <label for="show-date" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">
-              显示日期
-            </label>
+
+          <!-- 效果预览 -->
+          <div class="preview-pill">
+            <span class="preview-time" :style="{ color: themeColorInput }">12:34</span>
+            <Icon icon="fluent:settings-24-filled" class="preview-icon" :style="{ color: themeColorInput }" />
           </div>
         </div>
-      </div>
-            <!-- 主色调设置 -->
-      <div class="space-y-3">
-        <h3 class="text-sm font-medium mb-2">主色调设置</h3>
-        <p class="text-xs text-gray-600 dark:text-zinc-400 mb-3">
-          设置时间和图标的颜色
-        </p>
-        
-        <!-- 高级调色盘 -->
-        <div class="flex flex-col space-y-4">
-          <!-- 色相选择器 -->
-          <div class="relative w-full h-40 rounded-lg overflow-hidden border border-gray-200 dark:border-zinc-700 shadow-sm">
-            <!-- 色相条 -->
-            <div 
-              class="absolute top-0 left-0 w-full h-8 cursor-pointer"
-              :style="{
-                background: `linear-gradient(to right, 
-                  #ff0000 0%, 
-                  #ffff00 17%, 
-                  #00ff00 33%, 
-                  #00ffff 50%, 
-                  #0000ff 67%, 
-                  #ff00ff 83%, 
-                  #ff0000 100%)`
-              }"
-              @click="selectThemeHue($event)"
-              @mousedown="startThemeHueDrag"
-              ref="themeHueBar"
-            >
-              <div 
-                class="absolute top-0 h-8 w-4 border-2 border-white shadow-md transform -translate-x-1/2"
-                :style="{left: `${themeHuePosition}%`, backgroundColor: themeHueColor}"
-              ></div>
-            </div>
-            
-            <!-- 饱和度/亮度选择器 -->
-            <div 
-              class="absolute top-10 left-0 right-0 bottom-0 cursor-pointer"
-              :style="{
-                backgroundColor: themeHueColor,
-                backgroundImage: `
-                  linear-gradient(to right, white, transparent),
-                  linear-gradient(to bottom, transparent, black)
-                `
-              }"
-              @click="selectThemeSaturationBrightness($event)"
-              @mousedown="startThemeSatBrightDrag"
-              ref="themeSatBrightnessArea"
-            >
-              <div 
-                class="absolute w-4 h-4 border-2 border-white rounded-full shadow-md transform -translate-x-1/2 -translate-y-1/2"
-                :style="{left: `${themeSaturationPosition}%`, top: `${themeBrightnessPosition}%`}"
-              ></div>
-            </div>
-          </div>
-          
-          <!-- 颜色预览和输入框 -->
-          <div class="flex items-center space-x-3">
-            <div class="w-12 h-12 rounded-lg shadow-md" :style="{backgroundColor: themeColorInput}"></div>
-            <div class="flex-1">
-              <input 
-                type="text" 
-                v-model="themeColorInput" 
-                class="w-full px-3 py-2 rounded-md border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm"
-                placeholder="输入颜色代码（例如 #495057）"
-                @blur="validateAndApplyThemeColor"
-              />
-            </div>
-          </div>
-          
-          <!-- 基础颜色选择器 -->
-          <div class="flex flex-wrap gap-2">
-            <div 
-              v-for="color in presetColors" 
-              :key="'theme-' + color" 
-              :style="{backgroundColor: color}" 
-              class="w-8 h-8 rounded-lg cursor-pointer border-2 transition-all duration-200 shadow-sm hover:shadow-md"
-              :class="themeColorInput === color ? 'border-blue-500 scale-110' : 'border-gray-200 dark:border-zinc-700 hover:scale-105'"
-              @click="selectThemePresetColor(color)"
-            ></div>
-          </div>
-        </div>
-        
-        <!-- 当前效果预览 -->
-        <div class="mt-4 p-4 rounded-lg bg-white/10 dark:bg-zinc-800/30 backdrop-blur-sm border border-gray-200 dark:border-zinc-700">
-          <p class="text-center font-medium mb-2">效果预览</p>
-          <div class="flex justify-center items-center gap-4">
-            <div class="text-4xl font-bold" :style="{ color: themeColorInput }">12:34</div>
-            <div class="text-2xl" :style="{ color: themeColorInput }">
-              <Icon icon="line-md:cog-filled" />
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 其他基础设置可以在这里添加 -->
-      
+      </section>
+
     </div>
   </div>
 </template>
 
-<script setup lang='ts'>
-import { ref, onMounted, watch } from "vue";
+<script setup lang="ts">
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
+import { Icon } from "@iconify/vue";
 import { useNotification } from "@/composables/useNotification";
 import { useWallpaper } from "@/composables/useWallpaper";
-import { Icon } from "@iconify/vue";
 
 const { success, error } = useNotification();
-const { themeColor, showTime, showSeconds, showDate, use24Hour, updateThemeColor, updateShowTime, updateShowSeconds, updateShowDate, updateUse24Hour, loadState } = useWallpaper();
+const {
+  themeColor, showTime, showSeconds, showDate, use24Hour,
+  clockFont, clockFontSize, clockFontWeight, useCustomColor,
+  updateThemeColor, updateShowTime, updateShowSeconds, updateShowDate, updateUse24Hour,
+  updateClockFont, updateClockFontSize, updateClockFontWeight, updateUseCustomColor,
+  loadState,
+} = useWallpaper();
 
-// 主色调相关状态
-const themeColorInput = ref(themeColor.value || '#495057');
+// ─── 字体选项 ──────────────────────────────────────────
+const fontOptions = [
+  { label: 'Inter',             value: 'Inter' },
+  { label: 'Jakarta Sans',      value: 'Plus Jakarta Sans' },
+  { label: 'Outfit',            value: 'Outfit' },
+  { label: 'Poppins',           value: 'Poppins' },
+  { label: 'Nunito',            value: 'Nunito' },
+  { label: 'Montserrat',        value: 'Montserrat' },
+];
 
-// 调色盘相关状态
-const themeHuePosition = ref(50); // 色相位置（百分比）
-const themeSaturationPosition = ref(50); // 饱和度位置（百分比）
-const themeBrightnessPosition = ref(50); // 亮度位置（百分比）
-const themeHueColor = ref('#ff0000'); // 当前色相的颜色
+const clockFontValue = ref(clockFont.value || 'Inter');
 
-// 调色盘元素引用
-const themeHueBar = ref(null);
-const themeSatBrightnessArea = ref(null);
+async function selectFont(font: string) {
+  clockFontValue.value = font;
+  await updateClockFont(font);
+}
 
-// 拖动状态
-const isDraggingThemeHue = ref(false);
-const isDraggingThemeSatBright = ref(false);
+// ─── 字体大小 & 粗细 ───────────────────────────────────
+const clockFontSizeValue = ref(clockFontSize.value || 96);
+const clockFontWeightValue = ref(clockFontWeight.value || 700);
+
+const WEIGHT_LABELS: Record<number, string> = {
+  300: '细', 400: '常规', 500: '中等', 600: '半粗', 700: '粗'
+};
+const weightLabel = computed(() => WEIGHT_LABELS[clockFontWeightValue.value] ?? String(clockFontWeightValue.value));
+
+let sizeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+function onFontSizeChange() {
+  if (sizeDebounceTimer) clearTimeout(sizeDebounceTimer);
+  sizeDebounceTimer = setTimeout(() => {
+    updateClockFontSize(clockFontSizeValue.value);
+  }, 200);
+}
+
+async function onFontWeightChange() {
+  await updateClockFontWeight(clockFontWeightValue.value);
+}
+
+// 恢复所有时钟相关默认值
+const DEFAULTS = { font: 'Inter', size: 96, weight: 700 };
+async function resetToDefaults() {
+  clockFontValue.value = DEFAULTS.font;
+  clockFontSizeValue.value = DEFAULTS.size;
+  clockFontWeightValue.value = DEFAULTS.weight;
+  await Promise.all([
+    updateClockFont(DEFAULTS.font),
+    updateClockFontSize(DEFAULTS.size),
+    updateClockFontWeight(DEFAULTS.weight),
+  ]);
+  success('已恢复', '字体设置已恢复为默认值');
+}
+
+// ─── 主色调 ───────────────────────────────────────────
+const themeColorInput = ref(themeColor.value || "#495057");
+const showPicker = ref(false);
+
+const themeHuePosition = ref(50);
+const themeSaturationPosition = ref(50);
+const themeBrightnessPosition = ref(50);
+const themeHueColor = ref("#ff0000");
+
+const themeHueBar = ref<HTMLElement | null>(null);
+const themeSatBrightnessArea = ref<HTMLElement | null>(null);
+const swatchWrapperRef = ref<HTMLElement | null>(null);
+const popoverRef = ref<HTMLElement | null>(null);
+
+const isDraggingHue = ref(false);
+const isDraggingSat = ref(false);
 const isLoading = ref(false);
 
-// 时间显示设置相关状态
+// ─── 自定义颜色开关 ────────────────────────────────────
+const useCustomColorValue = ref(useCustomColor.value);
+
+async function onCustomColorToggle() {
+  await updateUseCustomColor(useCustomColorValue.value);
+}
+
+// ─── 时间设置 ──────────────────────────────────────────
 const showTimeValue = ref(showTime.value);
 const showSecondsValue = ref(showSeconds.value);
 const showDateValue = ref(showDate.value);
 const use24HourValue = ref(use24Hour.value);
 
-// 判断颜色是否为深色，用于决定文字颜色
-// 计算颜色的亮度，如果亮度小于128，则认为是深色
-const isDarkColor = (color: string): boolean => {
-  // 验证颜色格式
-  const colorRegex = /^#([0-9A-F]{3}){1,2}$/i;
-  if (!colorRegex.test(color)) return false;
-  
-  // 将颜色转换为RGB
-  let r, g, b;
-  if (color.length === 4) {
-    // #RGB
-    r = parseInt(color[1] + color[1], 16);
-    g = parseInt(color[2] + color[2], 16);
-    b = parseInt(color[3] + color[3], 16);
-  } else {
-    // #RRGGBB
-    r = parseInt(color.slice(1, 3), 16);
-    g = parseInt(color.slice(3, 5), 16);
-    b = parseInt(color.slice(5, 7), 16);
+// ─── 预设颜色 ──────────────────────────────────────────
+const presetColors = [
+  "#ffffff", "#000000", "#495057", "#3498db",
+  "#2ecc71", "#e74c3c", "#f39c12", "#9b59b6",
+  "#1abc9c", "#34495e", "#7f8c8d",
+];
+
+// ─── 气泡框开关 ────────────────────────────────────────
+function togglePicker() {
+  showPicker.value = !showPicker.value;
+}
+
+function closePicker() {
+  showPicker.value = false;
+}
+
+function handleClickOutside(e: MouseEvent) {
+  if (
+    swatchWrapperRef.value &&
+    !swatchWrapperRef.value.contains(e.target as Node)
+  ) {
+    closePicker();
   }
-  
-  // 计算亮度 (YIQ公式)
-  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-  return yiq < 128; // 如果亮度小于128，认为是深色
-};
+}
 
-// 验证并应用主色调
-const validateAndApplyThemeColor = () => {
-  // 验证颜色格式
-  const colorRegex = /^#([0-9A-F]{3}){1,2}$/i;
-  if (!colorRegex.test(themeColorInput.value)) {
-    // 如果不是有效的十六进制颜色，重置为默认值
-    error('颜色格式错误', '请输入有效的十六进制颜色代码（例如 #495057）');
-    themeColorInput.value = themeColor.value || '#495057';
-    updateThemeColorFromHex(themeColorInput.value);
-    return;
-  }
-  
-  // 更新主色调
-  updateThemeColor(themeColorInput.value);
-  updateThemeColorFromHex(themeColorInput.value);
-};
-
-// 选择主色调预设颜色
-const selectThemePresetColor = (color: string) => {
-  themeColorInput.value = color;
-  updateThemeColorFromHex(color);
-  validateAndApplyThemeColor();
-};
-
-// 调色盘相关函数
-
-// 选择色相
-const selectThemeHue = (event: MouseEvent) => {
-  if (!themeHueBar.value) return;
-  
-  const rect = themeHueBar.value.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const width = rect.width;
-  
-  // 计算百分比位置
-  const position = Math.max(0, Math.min(100, (x / width) * 100));
-  themeHuePosition.value = position;
-  
-  // 更新色相颜色
-  updateThemeHueColor();
-  
-  // 更新最终颜色
-  updateThemeFinalColor();
-};
-
-// 选择饱和度和亮度
-const selectThemeSaturationBrightness = (event: MouseEvent) => {
-  if (!themeSatBrightnessArea.value) return;
-  
-  const rect = themeSatBrightnessArea.value.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
-  const width = rect.width;
-  const height = rect.height;
-  
-  // 计算百分比位置
-  const satPosition = Math.max(0, Math.min(100, (x / width) * 100));
-  const brightPosition = Math.max(0, Math.min(100, (y / height) * 100));
-  
-  themeSaturationPosition.value = satPosition;
-  themeBrightnessPosition.value = brightPosition;
-  
-  // 更新最终颜色
-  updateThemeFinalColor();
-};
-
-// 开始拖动色相
-const startThemeHueDrag = (event: MouseEvent) => {
-  isDraggingThemeHue.value = true;
-  selectThemeHue(event);
-  
-  const handleMouseMove = (e: MouseEvent) => {
-    if (isDraggingThemeHue.value) {
-      selectThemeHue(e);
-    }
-  };
-  
-  const handleMouseUp = () => {
-    isDraggingThemeHue.value = false;
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
-  };
-  
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
-};
-
-// 开始拖动饱和度/亮度
-const startThemeSatBrightDrag = (event: MouseEvent) => {
-  isDraggingThemeSatBright.value = true;
-  selectThemeSaturationBrightness(event);
-  
-  const handleMouseMove = (e: MouseEvent) => {
-    if (isDraggingThemeSatBright.value) {
-      selectThemeSaturationBrightness(e);
-    }
-  };
-  
-  const handleMouseUp = () => {
-    isDraggingThemeSatBright.value = false;
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
-  };
-  
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
-};
-
-// 更新色相颜色
-const updateThemeHueColor = () => {
-  // 根据色相位置计算RGB颜色
-  const hue = (themeHuePosition.value / 100) * 360;
-  themeHueColor.value = hslToHex(hue, 100, 50);
-};
-
-// 更新最终颜色
-const updateThemeFinalColor = () => {
-  // 根据色相、饱和度和亮度计算最终颜色
-  const hue = (themeHuePosition.value / 100) * 360;
-  const saturation = themeSaturationPosition.value;
-  const brightness = 100 - themeBrightnessPosition.value; // 亮度是从上到下递减的
-  
-  // 转换为十六进制颜色
-  themeColorInput.value = hslToHex(hue, saturation, brightness);
-  
-  // 更新主色调
-  updateThemeColor(themeColorInput.value);
-};
-
-// 从十六进制颜色更新调色盘状态
-const updateThemeColorFromHex = (hexColor: string) => {
-  // 将十六进制颜色转换为HSL
-  const hsl = hexToHsl(hexColor);
-  
-  // 更新调色盘状态
-  themeHuePosition.value = (hsl.h / 360) * 100;
-  themeSaturationPosition.value = hsl.s;
-  themeBrightnessPosition.value = 100 - hsl.l; // 亮度是从上到下递减的
-  
-  // 更新色相颜色
-  updateThemeHueColor();
-};
-
-// HSL转十六进制颜色
-const hslToHex = (h: number, s: number, l: number): string => {
-  s /= 100;
-  l /= 100;
-  
+// ─── 颜色工具 ──────────────────────────────────────────
+function hslToHex(h: number, s: number, l: number): string {
+  s /= 100; l /= 100;
   const c = (1 - Math.abs(2 * l - 1)) * s;
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = l - c / 2;
-  
   let r = 0, g = 0, b = 0;
-  
-  if (0 <= h && h < 60) {
-    r = c; g = x; b = 0;
-  } else if (60 <= h && h < 120) {
-    r = x; g = c; b = 0;
-  } else if (120 <= h && h < 180) {
-    r = 0; g = c; b = x;
-  } else if (180 <= h && h < 240) {
-    r = 0; g = x; b = c;
-  } else if (240 <= h && h < 300) {
-    r = x; g = 0; b = c;
-  } else if (300 <= h && h < 360) {
-    r = c; g = 0; b = x;
-  }
-  
-  // 转换为十六进制
-  const toHex = (c: number): string => {
-    const hex = Math.round((c + m) * 255).toString(16);
-    return hex.length === 1 ? '0' + hex : hex;
-  };
-  
+  if (h < 60)       { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else              { r = c; b = x; }
+  const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-};
+}
 
-// 十六进制颜色转换为HSL
-const hexToHsl = (hex: string): {h: number, s: number, l: number} => {
-  // 将十六进制颜色转换为RGB
-  let r, g, b;
-  
-  // 处理缩写形式 #RGB
+function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  let r: number, g: number, b: number;
   if (hex.length === 4) {
     r = parseInt(hex[1] + hex[1], 16) / 255;
     g = parseInt(hex[2] + hex[2], 16) / 255;
     b = parseInt(hex[3] + hex[3], 16) / 255;
   } else {
-    // 处理完整形式 #RRGGBB
     r = parseInt(hex.slice(1, 3), 16) / 255;
     g = parseInt(hex.slice(3, 5), 16) / 255;
     b = parseInt(hex.slice(5, 7), 16) / 255;
   }
-  
-  // 计算HSL
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  let h = 0, s = 0, l = (max + min) / 2;
-  
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
   if (max !== min) {
     const d = max - min;
     s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    
     switch (max) {
       case r: h = (g - b) / d + (g < b ? 6 : 0); break;
       case g: h = (b - r) / d + 2; break;
       case b: h = (r - g) / d + 4; break;
     }
-    
     h /= 6;
   }
-  
-  return {
-    h: h * 360,
-    s: s * 100,
-    l: l * 100
-  };
-};
+  return { h: h * 360, s: s * 100, l: l * 100 };
+}
 
-// 简化预设颜色列表，只保留基础颜色
-const presetColors = [
-  // 基础颜色
-  '#ffffff', // 白色
-  '#000000', // 黑色
-  '#495057', // 暗灰色 (默认主色调)
-  '#3498db', // 蓝色
-  '#2ecc71', // 绿色
-  '#e74c3c', // 红色
-  '#f39c12', // 橙色
-  '#9b59b6', // 紫色
-  '#1abc9c', // 青绿色
-  '#34495e', // 深蓝色
-  '#7f8c8d', // 灰色
-];
+function updateThemeHueColor() {
+  themeHueColor.value = hslToHex((themeHuePosition.value / 100) * 360, 100, 50);
+}
 
+function updateThemeFinalColor() {
+  const hue = (themeHuePosition.value / 100) * 360;
+  const color = hslToHex(hue, themeSaturationPosition.value, 100 - themeBrightnessPosition.value);
+  themeColorInput.value = color;
+  updateThemeColor(color);
+}
 
-// 组件挂载时加载状态
+function updateThemeColorFromHex(hex: string) {
+  const hsl = hexToHsl(hex);
+  themeHuePosition.value = (hsl.h / 360) * 100;
+  themeSaturationPosition.value = hsl.s;
+  themeBrightnessPosition.value = 100 - hsl.l;
+  updateThemeHueColor();
+}
+
+// ─── 色相拖拽 ──────────────────────────────────────────
+function selectThemeHue(e: MouseEvent) {
+  if (!themeHueBar.value) return;
+  const rect = themeHueBar.value.getBoundingClientRect();
+  themeHuePosition.value = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+  updateThemeHueColor();
+  updateThemeFinalColor();
+}
+
+function startThemeHueDrag(e: MouseEvent) {
+  isDraggingHue.value = true;
+  selectThemeHue(e);
+  const move = (ev: MouseEvent) => { if (isDraggingHue.value) selectThemeHue(ev); };
+  const up = () => { isDraggingHue.value = false; document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); };
+  document.addEventListener("mousemove", move);
+  document.addEventListener("mouseup", up);
+}
+
+// ─── 饱和度/亮度拖拽 ──────────────────────────────────
+function selectThemeSaturationBrightness(e: MouseEvent) {
+  if (!themeSatBrightnessArea.value) return;
+  const rect = themeSatBrightnessArea.value.getBoundingClientRect();
+  themeSaturationPosition.value = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+  themeBrightnessPosition.value = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+  updateThemeFinalColor();
+}
+
+function startThemeSatBrightDrag(e: MouseEvent) {
+  isDraggingSat.value = true;
+  selectThemeSaturationBrightness(e);
+  const move = (ev: MouseEvent) => { if (isDraggingSat.value) selectThemeSaturationBrightness(ev); };
+  const up = () => { isDraggingSat.value = false; document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); };
+  document.addEventListener("mousemove", move);
+  document.addEventListener("mouseup", up);
+}
+
+// ─── 预设 & 验证 ───────────────────────────────────────
+function selectThemePresetColor(color: string) {
+  themeColorInput.value = color;
+  updateThemeColorFromHex(color);
+  updateThemeColor(color);
+}
+
+function validateAndApplyThemeColor() {
+  const colorRegex = /^#([0-9A-F]{3}){1,2}$/i;
+  if (!colorRegex.test(themeColorInput.value)) {
+    error("颜色格式错误", "请输入有效的十六进制颜色代码");
+    themeColorInput.value = themeColor.value || "#495057";
+    updateThemeColorFromHex(themeColorInput.value);
+    return;
+  }
+  updateThemeColor(themeColorInput.value);
+  updateThemeColorFromHex(themeColorInput.value);
+}
+
+// ─── 时间设置 watchers ────────────────────────────────
+async function withLoading(fn: () => Promise<void>, onError: () => void) {
+  if (isLoading.value) return;
+  isLoading.value = true;
+  try { await fn(); } catch (e) { error("更新失败", e?.toString()); onError(); } finally { isLoading.value = false; }
+}
+
+watch(showTimeValue, (v) => withLoading(async () => { await updateShowTime(v); success("已更新", `时间显示已${v ? "开启" : "关闭"}`); }, () => { showTimeValue.value = !v; }));
+watch(showSecondsValue, (v) => { if (!showTimeValue.value) return; withLoading(async () => { await updateShowSeconds(v); success("已更新", `秒数已${v ? "开启" : "关闭"}`); }, () => { showSecondsValue.value = !v; }); });
+watch(showDateValue, (v) => withLoading(async () => { await updateShowDate(v); success("已更新", `日期显示已${v ? "开启" : "关闭"}`); }, () => { showDateValue.value = !v; }));
+watch(use24HourValue, (v) => { if (!showTimeValue.value) return; withLoading(async () => { await updateUse24Hour(v); success("已更新", `已切换为${v ? "24小时制" : "12小时制"}`); }, () => { use24HourValue.value = !v; }); });
+
+watch(themeColorInput, async (v) => {
+  const colorRegex = /^#([0-9A-F]{3}){1,2}$/i;
+  if (!colorRegex.test(v) || isLoading.value || v === themeColor.value) return;
+  isLoading.value = true;
+  try { await updateThemeColor(v); } catch { themeColorInput.value = themeColor.value; } finally { isLoading.value = false; }
+});
+
 onMounted(async () => {
   await loadState();
-  
-  // 设置当前主色调
-  themeColorInput.value = themeColor.value || '#495057';
-  
-  // 初始化调色盘状态
+  themeColorInput.value = themeColor.value || "#495057";
   updateThemeColorFromHex(themeColorInput.value);
-  
-  // 同步主色调和时间设置
   showTimeValue.value = showTime.value;
   showSecondsValue.value = showSeconds.value;
   showDateValue.value = showDate.value;
   use24HourValue.value = use24Hour.value;
+  clockFontValue.value = clockFont.value || 'Inter';
+  clockFontSizeValue.value = clockFontSize.value || 96;
+  clockFontWeightValue.value = clockFontWeight.value || 700;
+  useCustomColorValue.value = useCustomColor.value;
+  document.addEventListener("mousedown", handleClickOutside);
 });
 
-// 监听设置变化，自动应用
-
-// 监听显示时间设置
-watch(showTimeValue, async (newValue) => {
-  if (isLoading.value) return;
-  
-  isLoading.value = true;
-  try {
-    await updateShowTime(newValue);
-    success('设置已更新', `时间显示已${newValue ? '开启' : '关闭'}`);
-    
-    // 如果关闭了时间显示，秒数和24小时制设置将被禁用
-    if (!newValue) {
-      // 不需要显示通知，因为这是默认行为
-    }
-  } catch (e) {
-    error('更新设置失败', e?.toString());
-    // 如果出错，还原设置
-    showTimeValue.value = !newValue;
-  } finally {
-    isLoading.value = false;
-  }
+onBeforeUnmount(() => {
+  document.removeEventListener("mousedown", handleClickOutside);
 });
-
-// 监听显示秒数设置
-watch(showSecondsValue, async (newValue) => {
-  if (isLoading.value || !showTimeValue.value) return;
-  
-  isLoading.value = true;
-  try {
-    await updateShowSeconds(newValue);
-    success('设置已更新', `秒数显示已${newValue ? '开启' : '关闭'}`);
-  } catch (e) {
-    error('更新设置失败', e?.toString());
-    // 如果出错，还原设置
-    showSecondsValue.value = !newValue;
-  } finally {
-    isLoading.value = false;
-  }
-});
-
-// 监听显示日期设置
-watch(showDateValue, async (newValue) => {
-  if (isLoading.value) return;
-  
-  isLoading.value = true;
-  try {
-    await updateShowDate(newValue);
-    success('设置已更新', `日期显示已${newValue ? '开启' : '关闭'}`);
-  } catch (e) {
-    error('更新设置失败', e?.toString());
-    // 如果出错，还原设置
-    showDateValue.value = !newValue;
-  } finally {
-    isLoading.value = false;
-  }
-});
-
-// 监听24小时制设置
-watch(use24HourValue, async (newValue) => {
-  if (isLoading.value || !showTimeValue.value) return;
-  
-  isLoading.value = true;
-  try {
-    await updateUse24Hour(newValue);
-    success('设置已更新', `已切换为${newValue ? '24小时制' : '12小时制'}`);
-  } catch (e) {
-    error('更新设置失败', e?.toString());
-    // 如果出错，还原设置
-    use24HourValue.value = !newValue;
-  } finally {
-    isLoading.value = false;
-  }
-});
-
-// 监听主色调设置
-watch(themeColorInput, async (newValue) => {
-  // 验证颜色格式
-  const colorRegex = /^#([0-9A-F]{3}){1,2}$/i;
-  if (!colorRegex.test(newValue)) {
-    return; // 如果不是有效的颜色格式，不进行更新
-  }
-  
-  if (isLoading.value || newValue === themeColor.value) return;
-  
-  isLoading.value = true;
-  try {
-    await updateThemeColor(newValue);
-    success('主色调已更新', '新的主色调已应用');
-  } catch (e) {
-    error('应用主色调失败', e?.toString());
-    // 如果出错，还原设置
-    themeColorInput.value = themeColor.value;
-  } finally {
-    isLoading.value = false;
-  }
-}, { debounce: 300 }); // 添加防抖，避免频繁更新
 </script>
 
 <style scoped>
-/* 确保禁用状态的样式正确应用 */
-input:disabled,
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
+#basic {
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
-/* 暗色模式适配 */
+/* 分区 */
+.setting-section { display: flex; flex-direction: column; gap: 12px; }
+.section-head { display: flex; flex-direction: column; gap: 2px; }
+.section-title { font-size: 13px; font-weight: 600; color: #1f2937; }
+.section-desc  { font-size: 11px; color: #9ca3af; }
+
+.divider {
+  height: 1px;
+  background: rgba(0,0,0,0.07);
+}
+
+/* 切换开关列表 */
+.toggle-list { display: flex; flex-direction: column; gap: 8px; }
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: #2563eb;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.toggle-label { font-size: 13px; color: #374151; }
+
+/* 大小滑块行 */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slider-label {
+  font-size: 12px;
+  color: #6b7280;
+  width: 28px;
+  flex-shrink: 0;
+}
+
+.size-slider {
+  flex: 1;
+  accent-color: #2563eb;
+  cursor: pointer;
+  height: 4px;
+}
+
+.slider-value {
+  font-size: 11px;
+  color: #9ca3af;
+  font-family: ui-monospace, monospace;
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* 恢复默认按钮 */
+.reset-btn {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: transparent;
+  font-size: 11px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.reset-btn:hover {
+  background: rgba(0,0,0,0.05);
+  color: #374151;
+}
+
+/* 实时预览 */
+.size-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60px;
+  background: rgba(0,0,0,0.03);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+/* 字体网格 */
+.font-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.font-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(0,0,0,0.08);
+  background: rgba(0,0,0,0.02);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+
+.font-card:hover {
+  background: rgba(0,0,0,0.05);
+  transform: translateY(-1px);
+}
+
+.font-card--active {
+  border-color: #2563eb;
+  background: rgba(37,99,235,0.06);
+}
+
+.font-preview {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1;
+}
+
+.font-name {
+  font-size: 10px;
+  color: #9ca3af;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.font-card--active .font-name {
+  color: #2563eb;
+}
+
+/* 颜色行 */
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 色块 */
+.swatch-wrapper { position: relative; flex-shrink: 0; }
+
+.color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 0 1.5px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.1);
+  transition: transform 0.15s, box-shadow 0.15s;
+  display: block;
+}
+
+.color-swatch:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.18), 0 4px 8px rgba(0,0,0,0.15);
+}
+
+/* Hex 小标签 */
+.hex-badge {
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* 效果预览胶囊 */
+.preview-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.preview-time {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-icon { font-size: 16px; }
+
+/* ── 气泡框 ───────────────────────────────────── */
+.color-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 240px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.06);
+  padding: 10px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 色相条 */
+.hue-bar {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  cursor: crosshair;
+  background: linear-gradient(to right,
+    #ff0000 0%, #ffff00 17%, #00ff00 33%,
+    #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+  user-select: none;
+}
+
+.hue-thumb {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* 饱和度/亮度面板 */
+.sb-panel {
+  position: relative;
+  height: 120px;
+  border-radius: 7px;
+  cursor: crosshair;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+  user-select: none;
+}
+
+.sb-thumb {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* 预设色 */
+.preset-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.preset-chip {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.1s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  padding: 0;
+}
+
+.preset-chip:hover { transform: scale(1.15); }
+.preset-chip--active {
+  border-color: #2563eb !important;
+  transform: scale(1.1);
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.25);
+}
+
+/* Hex 输入行 */
+.hex-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid rgba(0,0,0,0.07);
+  padding-top: 8px;
+}
+
+.hex-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #9ca3af;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.hex-input {
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  color: #374151;
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.hex-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+
+/* 气泡动画 */
+.popover-enter-active,
+.popover-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.popover-enter-from,
+.popover-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.97);
+}
+
+/* 暗色模式 */
 @media (prefers-color-scheme: dark) {
-  input:disabled,
-  button:disabled {
-    background-color: rgb(39, 39, 42);
+  .section-title { color: #f3f4f6; }
+  .toggle-label  { color: #d1d5db; }
+  .divider       { background: rgba(255,255,255,0.07); }
+
+  .font-card {
+    border-color: rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+  }
+
+  .font-card:hover { background: rgba(255,255,255,0.06); }
+
+  .font-card--active {
+    border-color: #3b82f6;
+    background: rgba(59,130,246,0.1);
+  }
+
+  .font-preview { color: #f3f4f6; }
+
+  .font-card--active .font-name { color: #60a5fa; }
+
+  .reset-btn {
+    border-color: rgba(255,255,255,0.1);
+    color: #9ca3af;
+  }
+
+  .reset-btn:hover {
+    background: rgba(255,255,255,0.06);
+    color: #e5e7eb;
+  }
+
+  .size-preview {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.06);
+  }
+
+  .size-preview span { color: #f3f4f6 !important; }
+
+  .preview-pill {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.08);
+  }
+
+  .color-popover {
+    background: #1f2937;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08);
+  }
+
+  .hue-bar, .sb-panel { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
+
+  .hex-row { border-top-color: rgba(255,255,255,0.08); }
+
+  .hex-input {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.1);
+    color: #e5e7eb;
+  }
+
+  .hex-input:focus { border-color: #3b82f6; }
+}
+
+input:disabled { cursor: not-allowed; }
+
+.custom-color-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.5;
+  padding: 6px 8px;
+  background: rgba(0,0,0,0.03);
+  border-radius: 6px;
+  border-left: 2px solid rgba(0,0,0,0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  .custom-color-hint {
+    background: rgba(255,255,255,0.04);
+    border-left-color: rgba(255,255,255,0.1);
   }
 }
 </style>

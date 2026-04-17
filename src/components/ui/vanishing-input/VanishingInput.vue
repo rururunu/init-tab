@@ -3,16 +3,31 @@
     'relative mx-auto h-12 w-full max-w-xl overflow-hidden rounded-full bg-white shadow-[0px_2px_3px_-1px_rgba(0,0,0,0.1),_0px_1px_0px_0px_rgba(25,28,33,0.02),_0px_0px_0px_1px_rgba(25,28,33,0.08)] transition duration-200 dark:bg-zinc-800',
     vanishingText && 'bg-gray-50',
   ]" @submit.prevent="handleSubmit">
+    <!-- Left icon slot -->
+    <div
+      v-if="hasLeftIcon"
+      class="absolute left-0 top-0 h-full flex items-center pl-3 z-[51] pointer-events-none"
+    >
+      <div class="pointer-events-auto">
+        <slot name="left-icon" />
+      </div>
+    </div>
+
     <!-- Canvas Element -->
     <canvas ref="canvasRef" :class="[
-      'pointer-events-none absolute left-2 top-[20%] origin-top-left scale-50 pr-20 text-base invert sm:left-8 dark:invert-0',
+      'pointer-events-none absolute top-[20%] origin-top-left scale-50 pr-20 text-base invert dark:invert-0',
+      hasLeftIcon ? 'left-10 sm:left-11' : 'left-2 sm:left-8',
       animating ? 'opacity-100' : 'opacity-0',
     ]" />
 
     <!-- Text Input -->
     <input ref="inputRef" :disabled="animating" type="text"
-      class="relative z-50 size-full rounded-full border-none bg-transparent pl-4 pr-20 text-sm text-black focus:outline-none focus:ring-0 sm:pl-10 sm:text-base dark:text-white"
-      :class="{ 'text-transparent dark:text-transparent': animating }" @keydown="handleKeyDown" @focus="$emit('focus')" @blur="$emit('blur')"
+      class="relative z-50 size-full rounded-full border-none bg-transparent pr-20 text-sm text-black focus:outline-none focus:ring-0 sm:text-base dark:text-white"
+      :class="[
+        hasLeftIcon ? 'pl-10 sm:pl-11' : 'pl-4 sm:pl-10',
+        animating ? 'text-transparent dark:text-transparent' : '',
+      ]"
+      @keydown="handleKeyDown" @focus="$emit('focus')" @blur="$emit('blur')"
       :value="vanishingText" @input="vanishingInput" />
 
     <!-- Submit Button -->
@@ -39,7 +54,8 @@
         enter-to-class="opacity-100 translate-y-0" leave-from-class="opacity-100 translate-y-0"
         leave-to-class="opacity-0 -translate-y-4">
         <p :key="currentPlaceholder"
-          class="w-[calc(100%-2rem)] truncate pl-4 text-left text-sm font-normal text-neutral-500 sm:pl-10 sm:text-base dark:text-zinc-500">
+          class="w-[calc(100%-2rem)] truncate text-left text-sm font-normal text-neutral-500 sm:text-base dark:text-zinc-500"
+          :class="hasLeftIcon ? 'pl-10 sm:pl-11' : 'pl-4 sm:pl-10'">
           {{ placeholders[currentPlaceholder] }}
         </p>
       </Transition>
@@ -48,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, onBeforeUnmount } from 'vue';
+import { ref, computed, useSlots, onMounted, watch, onBeforeUnmount } from 'vue';
 import { templateRef } from '@vueuse/core';
 
 // Define interfaces for props and data structures
@@ -87,6 +103,9 @@ let escapeTimeout: ReturnType<typeof setTimeout> | null = null;
 const props = withDefaults(defineProps<Props>(), {
   placeholders: () => ['Placeholder 1', 'Placeholder 2', 'Placeholder 3'],
 });
+
+const slots = useSlots()
+const hasLeftIcon = computed(() => !!slots['left-icon'])
 
 // Focus on input when mounted
 onMounted(() => {
@@ -282,6 +301,12 @@ onBeforeUnmount(() => {
 
 <style lang="css" scoped>
 #van-form {
-  all: revert;
+  border: none;
+  padding: 0;
+  margin: 0 auto;
+  font-size: inherit;
+  font-family: inherit;
+  appearance: none;
+  -webkit-appearance: none;
 }
 </style>

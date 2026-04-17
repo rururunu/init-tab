@@ -59,25 +59,16 @@ if (isExtensionEnvironment) {
                     return;
                 }
 
-                // 只在允许的URL上注入脚本
+                // content-script.js 已通过 manifest content_scripts 自动注入，直接发消息即可
                 if (tab.url.startsWith('http') || tab.url.startsWith('https')) {
                     try {
-                        await chrome.scripting.executeScript({
-                            target: { tabId: tab.id },
-                            files: ['content-script.js']
+                        await chrome.tabs.sendMessage(tab.id, {
+                            action: 'SHOW_SEARCH',
+                            timestamp: Date.now()
                         });
                     } catch (e) {
-                        // 忽略已注入的错误
-                        if (!e.message.includes('Cannot access contents of url')) {
-                            console.error('Script injection error:', e);
-                        }
+                        console.error('SendMessage error:', e);
                     }
-
-                    // 发送消息
-                    await chrome.tabs.sendMessage(tab.id, { 
-                        action: 'SHOW_SEARCH',
-                        timestamp: Date.now()
-                    });
                 }
             } catch (error) {
                 console.error('Command handling error:', error);
@@ -88,5 +79,16 @@ if (isExtensionEnvironment) {
     // 只在安装时执行的代码
     chrome.runtime.onInstalled.addListener((details) => {
         console.log('Extension installed/updated:', details.reason);
+    });
+
+    // 代理搜索建议请求（content script 受 CORS 限制，由 background 代为 fetch）
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'FETCH_SUGGESTIONS') {
+            fetch(request.url)
+                .then(res => res.json())
+                .then(data => sendResponse({ success: true, data }))
+                .catch(err => sendResponse({ success: false, error: err.message }));
+            return true; // 保持消息通道开放以支持异步响应
+        }
     });
 }
