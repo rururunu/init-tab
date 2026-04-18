@@ -262,7 +262,11 @@ watch(ide, (newValue) => {
 const loadEngines = async () => {
   try {
     const saved = await storage.get('jumpData')
-    jumpData.value = (saved && Array.isArray(saved)) ? saved : [...defaultJumpData]
+    let parsed: any = saved
+    if (typeof saved === 'string') {
+      try { parsed = JSON.parse(saved) } catch {}
+    }
+    jumpData.value = (parsed && Array.isArray(parsed)) ? parsed : [...defaultJumpData]
   } catch {
     jumpData.value = [...defaultJumpData]
   }
@@ -273,9 +277,22 @@ const init = async () => {
     const savedKey = await storage.get('defaultKey')
     const savedJump = await storage.get('jumpData')
     defaultKey.value = (savedKey || 'bd') as string
-    jumpData.value = JSON.parse((savedJump as string) || JSON.stringify(defaultJumpData))
+    
+    let parsed: any = savedJump
+    if (typeof savedJump === 'string') {
+      try { parsed = JSON.parse(savedJump) } catch {}
+    }
+    jumpData.value = (parsed && Array.isArray(parsed)) ? parsed : [...defaultJumpData]
+    
     jumpToData.value = new Map()
-    jumpData.value.forEach(d => d.key.forEach(k => jumpToData.value.set(k, d)))
+    jumpData.value.forEach(d => d.key.forEach(k => {
+      if (k) jumpToData.value.set(k, d)
+    }))
+
+    if (!jumpToData.value.has(defaultKey.value) && jumpData.value.length > 0 && jumpData.value[0].key.length > 0) {
+      defaultKey.value = jumpData.value[0].key[0]
+      await storage.set('defaultKey', defaultKey.value)
+    }
   } catch (e) {
     console.error('SearchBar init error:', e)
   }
@@ -299,8 +316,8 @@ async function jumpTo(jumpType: string, toData: string) {
   if (engine) {
     window.open(engine.jumpUrl.replace('&<query>', toData), '_blank', 'noopener,noreferrer')
   } else {
-    const def = jumpToData.value.get(defaultKey.value)
-    if (def) window.open(def.jumpUrl.replace('&<query>', jumpType + toData), '_blank', 'noopener,noreferrer')
+    const def = jumpToData.value.get(defaultKey.value) || jumpData.value[0]
+    if (def) window.open(def.jumpUrl.replace('&<query>', jumpType + (toData ? ' ' + toData : '')), '_blank', 'noopener,noreferrer')
   }
 }
 

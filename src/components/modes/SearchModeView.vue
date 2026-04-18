@@ -1,13 +1,13 @@
 <template>
   <!-- 单根节点包装，Transition 必须只有一个子元素 -->
-  <div class="search-mode-view w-full flex flex-col items-center relative">
+  <div class="search-mode-view w-full h-full flex flex-col items-center justify-center relative pb-[25vh]">
 
 <!-- 时间和日期显示 -->
     <BlurReveal
       v-if="showTime || showDate"
       :delay="0.2"
       :duration="0.75"
-      class="p-8"
+      class="p-4 sm:p-8"
     >
       <template v-if="showTime">
         <h2
@@ -27,7 +27,7 @@
         <div class="mb-3" />
       </template>
       <div
-        class="mb-30 text-center text-sm tracking-[0.2em] sm:mb-50 select-none cursor-none"
+        class="mb-6 text-center text-sm tracking-[0.2em] sm:mb-12 select-none cursor-none"
         :style="{
           color: clockColor,
           fontFamily: `'${clockFont}', sans-serif`,
@@ -41,18 +41,10 @@
 
     <!-- 搜索区域 -->
     <div
-      class="w-full relative z-2 flex flex-col items-center"
-      :class="{
-        'h-[40vh] justify-center': !showTime && !showDate,
-        'justify-start pt-4': showTime || showDate,
-      }"
+      class="w-full relative z-2 flex flex-col items-center justify-center"
     >
       <div
-        class="w-full transition-all duration-500 ease-in-out"
-        :class="{
-          'transform scale-95 translate-y-[-20px]': showTime || showDate,
-          'transform scale-100 translate-y-0': !showTime && !showDate,
-        }"
+        class="w-full transition-all duration-500 ease-in-out transform scale-100 translate-y-0"
       >
         <SearchBar />
       </div>

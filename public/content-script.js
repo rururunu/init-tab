@@ -767,13 +767,21 @@ const showSearchBox = () => {
   if (searchElements) searchElements.show();
 };
 
-// ─── 全局 Escape ─────────────────────────────────────────
+// ─── 全局 Escape 和 Alt+S ───────────────────────────────
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     const overlay = document.getElementById('gs-overlay');
     if (overlay && overlay.style.display === 'flex') {
       e.preventDefault();
       if (animateHide) animateHide();
+    }
+  } else if (e.altKey && (e.key === 's' || e.key === 'S')) {
+    e.preventDefault();
+    const overlay = document.getElementById('gs-overlay');
+    if (overlay && overlay.style.display === 'flex') {
+      if (animateHide) animateHide();
+    } else {
+      showSearchBox();
     }
   }
 });
