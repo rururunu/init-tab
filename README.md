@@ -1,65 +1,32 @@
-# INIT TAB
-### 有趣有简单的标签页
+# INIT TAB ✨
 
-* 全局搜索框只需按下 Alt + s
-* 支持自定义搜索引擎 
-* 快速方便的工作引擎切换
+打开新标签页，也可以很有意思。
 
-![Snipaste_2025-04-13_07-55-57](https://github.com/user-attachments/assets/3a89af8d-61da-4ce5-98ef-b28da786de3f)
-![Snipaste_2025-04-13_07-56-06](https://github.com/user-attachments/assets/bf758de5-98a3-4de4-b935-660a04bf8001)
-![Snipaste_2025-04-13_07-55-06](https://github.com/user-attachments/assets/3b00795c-f182-4bfc-bb64-c4b802ad7352)
-![Snipaste_2025-04-13_07-56-57](https://github.com/user-attachments/assets/78208108-7a97-4c41-9c69-aab5c51059ed)
-![Snipaste_2025-04-13_07-57-16](https://github.com/user-attachments/assets/4048c4f1-a554-4c7d-a2e5-f187fa6ba07f)
-![Snipaste_2025-04-13_07-58-30](https://github.com/user-attachments/assets/a73186f3-9f93-465c-95c9-cd873982f6aa)
-![Snipaste_2025-04-13_07-58-23](https://github.com/user-attachments/assets/cfabd38a-4afc-40f2-be20-974005c3122e)
+<img width="700" alt="preview" src="https://github.com/user-attachments/assets/164532ca-d247-4b70-8362-a48a6caba961" />
 
-### 使用教程
+<img width="700" alt="preview" src="https://github.com/user-attachments/assets/41d43a18-f0ec-494e-8417-b7a478b210d7" />
 
-#### 基本搜索
+---
 
-1. 直接输入搜索内容，将使用默认搜索引擎进行搜索
+## 🔍 随手搜，不打断
 
-#### 搜索内容
+任何页面按下 `Alt + S`，搜索框就弹出来了——不用切标签，不用动鼠标。
 
-##### 指定搜索引擎搜索
+<img width="700" alt="search box" src="https://github.com/user-attachments/assets/6b8563c6-2a18-4839-91eb-404679dad201" />
 
-1. 输入搜索引擎的 key，然后输入搜索内容
+<img width="700" alt="search suggestion" src="https://github.com/user-attachments/assets/8f316856-0730-4858-9e36-87a10aa3018e" />
 
-* bd 搜索内容 使用百度搜索
+---
 
-* gg 搜索内容 使用谷歌搜索
+## 🎮 玩法
 
-* bi 搜索内容 使用必应搜索
+| 操作 | 效果 |
+|------|------|
+| `Alt + S` | 唤起搜索框 |
+| `cd gg` | 切换到 Google 搜索 |
+| `* 关键词` | 在收藏夹里搜书签 |
 
-##### 切换默认搜索引擎
-
-1. 输入 "cd" 查看可用的搜索引擎
-
-2. 输入 "cd key" 切换默认搜索引擎
-
-* cd 显示所有可用的搜索引擎
-
-* cd bd 将百度设置为默认搜索引擎
-
-##### 搜索书签(收藏)
-* 输入 * 后面加上标题或网址即可 如 搜索 deepseek 输入 *de 即可选择
-![PixPin_2025-04-16_23-22-39](https://github.com/user-attachments/assets/8b24455b-2885-42d3-b39a-d0fd768f4425)
-
-##### 快捷键
-
-* Alt + S 打开全局搜索框
-* Esc 关闭搜索框
-
-##### 自定义搜索引擎
-
-1. 在设置页面的"搜索引擎"选项中添加或修改搜索引擎
-
-2. 每个搜索引擎需要设置：
-
-关键词（key）：用于快速调用搜索引擎
-
-标签（label）：搜索引擎的显示名称
-
-搜索链接（jumpUrl）：搜索的URL模板，使用 &<query> 作为搜索内容的占位符
-
-
+- **壁纸随心换** — 塞一张自己喜欢的图，每次打开都是好心情
+- **搜索引擎一键切** — 输 `cd` 加引擎缩写，想用哪个用哪个
+- **书签不再难找** — `*` 开头，直接搜收藏栏
+- **输入有提示** — 搜什么，边打边猜
