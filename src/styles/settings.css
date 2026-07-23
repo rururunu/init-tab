@@ -1,0 +1,282 @@
+/* 设置页 / 主页共用视觉语言（不含搜索框） */
+
+:root {
+  --ui-accent: #2563eb;
+  --ui-accent-hover: #1d4ed8;
+  --ui-accent-soft: rgba(37, 99, 235, 0.08);
+  --ui-text: #1f2937;
+  --ui-text-secondary: #374151;
+  --ui-text-muted: #9ca3af;
+  --ui-border: rgba(0, 0, 0, 0.07);
+  --ui-border-strong: rgba(0, 0, 0, 0.1);
+  --ui-surface: rgba(255, 255, 255, 0.72);
+  --ui-surface-soft: rgba(0, 0, 0, 0.03);
+  --ui-radius: 12px;
+  --ui-radius-sm: 8px;
+  --ui-scrollbar-size: 4px;
+  --ui-scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --ui-scrollbar-thumb-hover: rgba(0, 0, 0, 0.28);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ui-text: #f3f4f6;
+    --ui-text-secondary: #e5e7eb;
+    --ui-text-muted: #71717a;
+    --ui-border: rgba(255, 255, 255, 0.08);
+    --ui-border-strong: rgba(255, 255, 255, 0.12);
+    --ui-surface: rgba(255, 255, 255, 0.05);
+    --ui-surface-soft: rgba(255, 255, 255, 0.04);
+    --ui-accent-soft: rgba(37, 99, 235, 0.16);
+    --ui-scrollbar-thumb: rgba(255, 255, 255, 0.15);
+    --ui-scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+  }
+}
+
+/* 全局统一滚动条 */
+.ui-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-scrollbar-thumb) transparent;
+}
+
+.ui-scroll::-webkit-scrollbar {
+  width: var(--ui-scrollbar-size);
+  height: var(--ui-scrollbar-size);
+}
+
+.ui-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ui-scroll::-webkit-scrollbar-thumb {
+  background: var(--ui-scrollbar-thumb);
+  border-radius: 999px;
+}
+
+.ui-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-scrollbar-thumb-hover);
+}
+
+/* 设置内容页通用容器 */
+.settings-page {
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-scrollbar-thumb) transparent;
+}
+
+.settings-page::-webkit-scrollbar {
+  width: var(--ui-scrollbar-size);
+  height: var(--ui-scrollbar-size);
+}
+.settings-page::-webkit-scrollbar-track { background: transparent; }
+.settings-page::-webkit-scrollbar-thumb {
+  background: var(--ui-scrollbar-thumb);
+  border-radius: 999px;
+}
+.settings-page::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-scrollbar-thumb-hover);
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text);
+  margin: 0;
+}
+
+.settings-section-desc {
+  font-size: 11px;
+  color: var(--ui-text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.settings-divider {
+  height: 1px;
+  background: var(--ui-border);
+  border: none;
+  margin: 0;
+}
+
+.settings-toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-toggle-row.is-nested {
+  margin-left: 24px;
+}
+
+.settings-toggle-row.is-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.settings-toggle-input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--ui-accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.settings-toggle-label {
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+}
+
+.settings-hint {
+  font-size: 11px;
+  color: var(--ui-text-muted);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.settings-hint.is-nested {
+  margin-left: 24px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.settings-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+  background: var(--ui-surface-soft);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 7px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.settings-input:focus {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.settings-input::placeholder {
+  color: var(--ui-text-muted);
+}
+
+.settings-btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.settings-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.settings-btn--primary {
+  background: var(--ui-accent);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.3);
+}
+
+.settings-btn--primary:hover {
+  background: var(--ui-accent-hover);
+}
+
+.settings-btn--ghost {
+  background: var(--ui-surface-soft);
+  color: var(--ui-text-secondary);
+  border: 1px solid var(--ui-border-strong);
+}
+
+.settings-btn--ghost:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .settings-btn--ghost:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.settings-card {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: 14px 16px;
+}
+
+.settings-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #52525b;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f4f4f5;
+  border: 1px solid #e4e4e7;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  letter-spacing: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .settings-kbd {
+    color: #d4d4d8;
+    background: #27272a;
+    border-color: #3f3f46;
+  }
+}

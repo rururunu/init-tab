@@ -1,12 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { onMounted, ref, shallowRef } from "vue";
-
-const currentSettingComponent = shallowRef<any>(null)
-
-onMounted(() => {
-  setUpClick(props.select[0].key)
-})
+import { onMounted, onBeforeUnmount, shallowRef, watch } from "vue";
 
 const props = defineProps<{
   show: boolean;
@@ -15,149 +9,187 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'close'): void;
+  (e: "close"): void;
 }>();
 
+const currentSettingComponent = shallowRef<any>(props.select?.[0] ?? null);
+
+onMounted(() => {
+  if (props.select?.[0]) setUpClick(props.select[0].key);
+});
+
 const handleClose = () => {
-  emit('close');
+  emit("close");
 };
 
 function setUpClick(select: string) {
-  props.select.forEach((item) => {
-    if (item.key === select) {
-      currentSettingComponent.value = item
-    }
-  });
+  const found = props.select.find((item) => item.key === select);
+  if (found) currentSettingComponent.value = found;
 }
 
+const onKeydown = (e: KeyboardEvent) => {
+  if (e.key === "Escape" && props.show) {
+    e.preventDefault();
+    handleClose();
+  }
+};
 
+watch(
+  () => props.show,
+  (open) => {
+    if (open) document.addEventListener("keydown", onKeydown);
+    else document.removeEventListener("keydown", onKeydown);
+  }
+);
+
+onBeforeUnmount(() => {
+  document.removeEventListener("keydown", onKeydown);
+});
 </script>
 
 <template>
-  <Transition name="dialog">
-    <div v-if="show" class="dialog-overlay" @click="handleClose">
-      <div class="dialog-content" @click.stop>
-        <!-- 左侧导航栏 -->
-        <div class="sidebar">
-          <!-- 头部：标题 + 关闭按钮 -->
-          <div class="sidebar-header">
-            <span class="sidebar-title">{{ props.title || '设置' }}</span>
-            <Icon
-              @click="handleClose"
-              icon="fluent-color:dismiss-circle-48"
-              class="text-xl cursor-pointer hover:opacity-70 transition-opacity"
+  <Teleport to="body">
+    <Transition name="drawer">
+      <div v-if="show" class="drawer-root">
+        <!-- 遮罩 -->
+        <div class="drawer-mask" @click="handleClose" />
+
+        <!-- 左侧抽屉 -->
+        <aside class="drawer-panel" role="dialog" aria-modal="true" @click.stop>
+          <!-- 顶栏 -->
+          <header class="drawer-header">
+            <span class="drawer-title">{{ props.title || "设置" }}</span>
+            <button type="button" class="drawer-close" title="关闭" @click="handleClose">
+              <Icon icon="fluent:dismiss-24-filled" class="text-lg" />
+            </button>
+          </header>
+
+          <!-- 导航 -->
+          <nav class="drawer-nav ui-scroll">
+            <button
+              v-for="(item, index) in select"
+              :key="index"
+              type="button"
+              class="nav-item"
+              :class="{ 'nav-item--active': currentSettingComponent?.key === item.key }"
+              @click="setUpClick(item.key)"
+            >
+              <Icon :icon="item.icon" class="text-lg flex-shrink-0" />
+              <span class="nav-label">{{ item.label }}</span>
+            </button>
+          </nav>
+
+          <!-- 内容 -->
+          <div class="drawer-body">
+            <div class="content-header" v-if="currentSettingComponent">
+              <span>{{ currentSettingComponent.label }}</span>
+            </div>
+            <component
+              v-if="currentSettingComponent"
+              class="drawer-content ui-scroll"
+              :is="currentSettingComponent.in"
             />
           </div>
-          <!-- 导航项 -->
-          <nav class="sidebar-nav">
-            <div
-              v-for="(select, index) in select"
-              :key="index"
-              class="nav-item"
-              :class="{ 'nav-item--active': currentSettingComponent.key === select.key }"
-              @click="setUpClick(select.key)"
-            >
-              <Icon :icon="select.icon" class="text-lg flex-shrink-0" />
-              <span class="nav-label">{{ select.label }}</span>
-            </div>
-          </nav>
-        </div>
-
-        <!-- 右侧内容区 -->
-        <div class="content-area">
-          <div class="content-header">
-            <span>{{ currentSettingComponent.label }}</span>
-          </div>
-          <component class="h-[calc(100%-44px)] overflow-auto" :is="currentSettingComponent.in" />
-        </div>
+        </aside>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
-.dialog-overlay {
+.drawer-root {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(20px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
   z-index: 1000;
+  pointer-events: none;
 }
 
-.dialog-content {
-  background-color: rgba(248, 249, 250, 0.85);
-  border-radius: 16px;
-  width: 90%;
-  max-width: 860px;
-  height: 62vh;
-  max-height: 580px;
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.15),
-    0 4px 12px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  display: flex;
-  flex-direction: row;
-  overflow: hidden;
-  transition: transform 0.3s ease, opacity 0.3s ease;
+.drawer-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 15, 18, 0.28);
+  backdrop-filter: blur(8px) saturate(130%);
+  -webkit-backdrop-filter: blur(8px) saturate(130%);
+  pointer-events: auto;
 }
 
-/* 左侧导航栏 */
-.sidebar {
-  width: 190px;
-  flex-shrink: 0;
+.drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: auto;
+  bottom: 0;
+  width: min(440px, 92vw);
   display: flex;
   flex-direction: column;
-  border-right: 1px solid rgba(0, 0, 0, 0.06);
-  background-color: rgba(255, 255, 255, 0.4);
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+  background: rgba(250, 250, 250, 0.96);
+  border-left: 1px solid rgba(0, 0, 0, 0.06);
+  border-right: none;
+  box-shadow: -8px 0 40px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  pointer-events: auto;
+  overflow: hidden;
 }
 
-.sidebar::-webkit-scrollbar { width: 4px; }
-.sidebar::-webkit-scrollbar-track { background: transparent; }
-.sidebar::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.15);
-  border-radius: 2px;
-}
-
-.sidebar-header {
+.drawer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 14px 12px;
+  height: 52px;
+  padding: 0 16px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   flex-shrink: 0;
 }
 
-.sidebar-title {
-  font-size: 14px;
+.drawer-title {
+  font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
-  letter-spacing: 0.01em;
+  color: #1f2937;
 }
 
-.sidebar-nav {
+.drawer-close {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.drawer-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #111827;
+}
+
+.drawer-nav {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 8px;
+  gap: 6px;
+  padding: 12px 12px 4px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
 }
 
 .nav-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
   cursor: pointer;
-  font-size: 13px;
-  color: #444;
+  font-size: 12px;
+  color: #4b5563;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: background-color 0.15s ease, color 0.15s ease;
   user-select: none;
 }
@@ -167,71 +199,79 @@ function setUpClick(select: string) {
 }
 
 .nav-item--active {
-  background-color: #006BDF;
+  background-color: #2563eb;
   color: #fff;
 }
 
 .nav-item--active:hover {
-  background-color: #0060cc;
+  background-color: #1d4ed8;
 }
 
 .nav-label {
   font-weight: 500;
 }
 
-/* 右侧内容区 */
-.content-area {
+.drawer-body {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  background-color: rgba(255, 255, 255, 0.5);
-  border-radius: 0 16px 16px 0;
-  overflow: hidden;
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .content-header {
-  height: 44px;
+  height: 40px;
   padding: 0 16px;
   display: flex;
   align-items: center;
   font-size: 13px;
   font-weight: 600;
-  color: #1a1a1a;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  color: #1f2937;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   flex-shrink: 0;
+}
+
+.drawer-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 /* 暗色模式 */
 @media (prefers-color-scheme: dark) {
-  .dialog-content {
-    background-color: rgba(28, 28, 30, 0.88);
-    border-color: rgba(255, 255, 255, 0.08);
-    box-shadow:
-      0 20px 60px rgba(0, 0, 0, 0.4),
-      0 4px 12px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  .drawer-mask {
+    background: rgba(0, 0, 0, 0.45);
   }
 
-  .sidebar {
-    background-color: rgba(255, 255, 255, 0.04);
-    border-right-color: rgba(255, 255, 255, 0.06);
-    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  .drawer-panel {
+    background: rgba(24, 24, 27, 0.96);
+    border-left-color: rgba(255, 255, 255, 0.08);
+    box-shadow: -8px 0 40px rgba(0, 0, 0, 0.4);
   }
 
-  .sidebar::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.15);
-  }
-
-  .sidebar-header {
+  .drawer-header {
     border-bottom-color: rgba(255, 255, 255, 0.06);
   }
 
-  .sidebar-title {
-    color: #f0f0f0;
+  .drawer-title {
+    color: #f3f4f6;
+  }
+
+  .drawer-close {
+    color: #a1a1aa;
+  }
+
+  .drawer-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f4f4f5;
+  }
+
+  .drawer-nav {
+    border-bottom-color: rgba(255, 255, 255, 0.05);
   }
 
   .nav-item {
-    color: #bbb;
+    color: #a1a1aa;
   }
 
   .nav-item:hover {
@@ -239,36 +279,49 @@ function setUpClick(select: string) {
     color: #fff;
   }
 
-  .content-area {
-    background-color: rgba(255, 255, 255, 0.04);
+  .drawer-body {
+    background: rgba(255, 255, 255, 0.02);
   }
 
   .content-header {
-    color: #f0f0f0;
+    color: #f3f4f6;
     border-bottom-color: rgba(255, 255, 255, 0.06);
   }
 }
 
-/* 对话框入场/离场动画 */
-.dialog-enter-active,
-.dialog-leave-active {
-  transition: opacity 0.25s ease;
+/* 抽屉动画：从右侧滑入 */
+.drawer-enter-active,
+.drawer-leave-active {
+  transition: opacity 0.22s ease;
 }
 
-.dialog-enter-from,
-.dialog-leave-to {
-  opacity: 0;
+.drawer-enter-active .drawer-panel,
+.drawer-leave-active .drawer-panel {
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.dialog-enter-from .dialog-content,
-.dialog-leave-to .dialog-content {
-  transform: scale(0.96) translateY(8px);
-  opacity: 0;
+.drawer-enter-active .drawer-mask,
+.drawer-leave-active .drawer-mask {
+  transition: opacity 0.22s ease;
 }
 
-.dialog-enter-to .dialog-content,
-.dialog-leave-from .dialog-content {
-  transform: scale(1) translateY(0);
+.drawer-enter-from,
+.drawer-leave-to {
   opacity: 1;
+}
+
+.drawer-enter-from .drawer-mask,
+.drawer-leave-to .drawer-mask {
+  opacity: 0;
+}
+
+.drawer-enter-from .drawer-panel,
+.drawer-leave-to .drawer-panel {
+  transform: translateX(100%);
+}
+
+.drawer-enter-to .drawer-panel,
+.drawer-leave-from .drawer-panel {
+  transform: translateX(0);
 }
 </style>

@@ -31,10 +31,8 @@
         "<all_urls>"
       ],
       "js": [
+        "ai-prompt-inject.js",
         "content-script.js"
-      ],
-      "css": [
-        "content-style.css"
       ],
       "run_at": "document_end",
       "all_frames": true
@@ -58,7 +56,16 @@
   "host_permissions": [
     "https://www.baidu.com/*",
     "https://www.google.com/*",
-    "https://api.bing.com/*"
+    "https://api.bing.com/*",
+    "https://www.bing.com/*",
+    "https://cn.bing.com/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://gemini.google.com/*",
+    "https://picsum.photos/*",
+    "https://*.picsum.photos/*",
+    "https://wallhaven.cc/*",
+    "https://*.wallhaven.cc/*"
   ],
   "action": {
     "default_title": "INIT"

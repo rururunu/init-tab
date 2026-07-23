@@ -1,187 +1,256 @@
 <template>
-  <div id="background" class="rounded-r-[12px] p-8">
-    <div class="space-y-4">
-      <!-- 背景选项组 -->
-      <div class="space-y-2">
-        <MacCheckbox v-model="wallpaperType" type="radio" value="none" name="background-type"
-          :checked="wallpaperType === 'none'" :disabled="isLoading === true">
-          <span class="text-sm">不使用壁纸</span>
-        </MacCheckbox>
-
-        <MacCheckbox v-model="wallpaperType" type="radio" value="source" name="background-type"
-          :checked="wallpaperType === 'source'" :disabled="isLoading === true">
-          <span class="text-sm">使用壁纸源</span>
-        </MacCheckbox>
-
-        <MacCheckbox v-model="wallpaperType" type="radio" value="custom" name="background-type"
-          :checked="wallpaperType === 'custom'" :disabled="isLoading === true">
-          <span class="text-sm">自定义背景图片</span>
-        </MacCheckbox>
-
-        <MacCheckbox v-model="wallpaperType" type="radio" value="color" name="background-type"
-          :checked="wallpaperType === 'color'" :disabled="isLoading === true">
-          <span class="text-sm">自定义颜色背景</span>
-        </MacCheckbox>
-
-        <!-- 添加蒙版控制选项 -->
-        <div v-if="wallpaperType !== 'none'" class="mt-4 pt-4 border-t border-gray-200 dark:border-zinc-700">
-          <MacCheckbox type="checkbox" :checked="showMask" @update:checked="toggleMask">
-            <span class="text-sm">显示背景遮罩</span>
-          </MacCheckbox>
-          <p class="text-xs text-gray-500 dark:text-zinc-500 mt-1 ml-7">
-            遮罩可以改善文字在背景上的可读性
-          </p>
-        </div>
+  <div class="settings-page bg-settings">
+    <!-- 背景类型 -->
+    <section class="settings-section">
+      <div class="settings-section-head">
+        <h3 class="settings-section-title">背景类型</h3>
+        <p class="settings-section-desc">选择新标签页的背景展示方式</p>
       </div>
 
-      <!-- 自定义背景选项 -->
-      <div v-if="wallpaperType === 'custom'" class="space-y-3">
-        <div class="flex flex-row items-center space-x-2">
-          <MacInput v-model="backgroundUrl" placeholder="请输入图片链接" class="flex-1" @blur="validateAndApplyBackgroundUrl" />
-          <MacButton @click="handleUploadClick" class="p-2" icon="fluent:arrow-upload-24-filled">
+      <div class="settings-toggle-list">
+        <label class="settings-toggle-row" :class="{ 'is-disabled': isLoading === true }">
+          <input type="radio" class="settings-toggle-input" value="none" v-model="wallpaperType" name="bg-type" :disabled="isLoading === true" />
+          <span class="settings-toggle-label">不使用壁纸</span>
+        </label>
+        <label class="settings-toggle-row" :class="{ 'is-disabled': isLoading === true }">
+          <input type="radio" class="settings-toggle-input" value="source" v-model="wallpaperType" name="bg-type" :disabled="isLoading === true" />
+          <span class="settings-toggle-label">使用壁纸源</span>
+        </label>
+        <label class="settings-toggle-row" :class="{ 'is-disabled': isLoading === true }">
+          <input type="radio" class="settings-toggle-input" value="custom" v-model="wallpaperType" name="bg-type" :disabled="isLoading === true" />
+          <span class="settings-toggle-label">自定义背景图片</span>
+        </label>
+        <label class="settings-toggle-row" :class="{ 'is-disabled': isLoading === true }">
+          <input type="radio" class="settings-toggle-input" value="color" v-model="wallpaperType" name="bg-type" :disabled="isLoading === true" />
+          <span class="settings-toggle-label">自定义颜色背景</span>
+        </label>
+      </div>
+    </section>
+
+    <hr v-if="wallpaperType !== 'none'" class="settings-divider" />
+
+    <!-- 遮罩 -->
+    <section v-if="wallpaperType !== 'none'" class="settings-section">
+      <div class="settings-section-head">
+        <h3 class="settings-section-title">背景遮罩</h3>
+        <p class="settings-section-desc">半透明遮罩可改善文字在壁纸上的可读性</p>
+      </div>
+      <label class="settings-toggle-row">
+        <input
+          type="checkbox"
+          class="settings-toggle-input"
+          :checked="showMask"
+          @change="onMaskChange"
+        />
+        <span class="settings-toggle-label">显示背景遮罩</span>
+      </label>
+    </section>
+
+    <!-- 自定义图片 -->
+    <template v-if="wallpaperType === 'custom'">
+      <hr class="settings-divider" />
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <h3 class="settings-section-title">自定义图片</h3>
+          <p class="settings-section-desc">粘贴图片链接或从本地上传</p>
+        </div>
+
+        <div class="bg-row">
+          <input
+            v-model="backgroundUrl"
+            class="settings-input"
+            placeholder="请输入图片链接"
+            @blur="validateAndApplyBackgroundUrl"
+          />
+          <button type="button" class="settings-btn settings-btn--ghost" @click="handleUploadClick">
+            <Icon icon="fluent:arrow-upload-24-filled" class="text-sm" />
             上传
-          </MacButton>
+          </button>
           <input type="file" @change="fileUp" id="fileInput" class="hidden" accept=".jpg,.png,.jpeg,.gif,.webp,.mp4" />
         </div>
 
-        <!-- 上传加载动画 -->
-        <Transition enter-active-class="transition duration-200 ease-out"
-          enter-from-class="transform scale-95 opacity-0" enter-to-class="transform scale-100 opacity-100"
-          leave-active-class="transition duration-150 ease-in" leave-from-class="transform scale-100 opacity-100"
-          leave-to-class="transform scale-95 opacity-0">
-          <div v-if="isUploading"
-            class="mt-4 p-4 rounded-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700">
-            <div class="flex items-center space-x-3">
-              <div class="loading-spinner"></div>
-              <div class="flex-1">
-                <p class="text-sm font-medium text-gray-900 dark:text-white">
-                  <span>正在上传图片...</span>
-                </p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  上传进度：{{ Math.floor(uploadProgress) }}%
-                </p>
-              </div>
+        <Transition
+          enter-active-class="transition duration-200 ease-out"
+          enter-from-class="transform scale-95 opacity-0"
+          enter-to-class="transform scale-100 opacity-100"
+          leave-active-class="transition duration-150 ease-in"
+          leave-from-class="transform scale-100 opacity-100"
+          leave-to-class="transform scale-95 opacity-0"
+        >
+          <div v-if="isUploading" class="upload-card">
+            <div class="loading-spinner" />
+            <div>
+              <p class="upload-title">正在上传图片...</p>
+              <p class="settings-hint">上传进度：{{ Math.floor(uploadProgress) }}%</p>
             </div>
           </div>
         </Transition>
 
-        <!-- 当前背景预览 -->
-        <div v-if="wallpaperUrl || backgroundUrl" class="mt-4">
-          <p class="text-sm text-gray-600 dark:text-zinc-400 mb-2">
-            <span>当前背景：</span>
+        <div v-if="wallpaperUrl || backgroundUrl" class="preview-block">
+          <p class="settings-field-label">当前背景</p>
+          <img
+            :src="wallpaperUrl || backgroundUrl"
+            class="preview-img"
+            alt="当前背景图片"
+            loading="lazy"
+          />
+        </div>
+      </section>
+    </template>
+
+    <!-- 颜色背景 -->
+    <template v-if="wallpaperType === 'color'">
+      <hr class="settings-divider" />
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <h3 class="settings-section-title">颜色背景</h3>
+          <p class="settings-section-desc">通过调色盘或预设色选择背景色</p>
+        </div>
+
+        <div class="color-picker-panel">
+          <div
+            class="hue-bar"
+            ref="hueBar"
+            @click="selectHue"
+            @mousedown="startHueDrag"
+          >
+            <div class="hue-thumb" :style="{ left: `${huePosition}%`, backgroundColor: hueColor }" />
+          </div>
+          <div
+            class="sb-panel"
+            ref="satBrightnessArea"
+            :style="{
+              backgroundColor: hueColor,
+              backgroundImage: 'linear-gradient(to right, white, transparent), linear-gradient(to bottom, transparent, black)',
+            }"
+            @click="selectSaturationBrightness"
+            @mousedown="startSatBrightDrag"
+          >
+            <div
+              class="sb-thumb"
+              :style="{ left: `${saturationPosition}%`, top: `${brightnessPosition}%` }"
+            />
+          </div>
+        </div>
+
+        <div class="bg-row">
+          <div class="color-swatch" :style="{ backgroundColor: colorInput }" />
+          <input
+            type="text"
+            v-model="colorInput"
+            class="settings-input"
+            placeholder="#3498db"
+            spellcheck="false"
+            @blur="validateColorInput"
+          />
+        </div>
+
+        <div class="preset-grid">
+          <button
+            v-for="color in uniquePresets"
+            :key="color"
+            type="button"
+            class="preset-chip"
+            :style="{ backgroundColor: color }"
+            :class="{ 'preset-chip--active': colorInput === color }"
+            @click="selectPresetColor(color)"
+          />
+        </div>
+
+        <div class="color-preview" :style="{ backgroundColor: colorInput }">
+          <span :class="isDarkColor(colorInput) ? 'text-white' : 'text-gray-800'">颜色预览</span>
+        </div>
+      </section>
+    </template>
+
+    <!-- 壁纸源 -->
+    <template v-if="wallpaperType === 'source'">
+      <hr class="settings-divider" />
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <h3 class="settings-section-title">壁纸源</h3>
+          <p class="settings-section-desc">选择在线源，可随时换一张；支持 Wallhaven</p>
+        </div>
+
+        <div class="source-grid">
+          <button
+            v-for="src in wallpaperSources"
+            :key="src.id"
+            type="button"
+            class="source-card"
+            :class="{ 'source-card--active': wallpaperSourceId === src.id }"
+            @click="selectSource(src.id)"
+          >
+            <span class="source-card-name">{{ src.name }}</span>
+            <span class="source-card-desc">{{ src.description }}</span>
+          </button>
+        </div>
+
+        <!-- Wallhaven 选项 -->
+        <div v-if="showWallhavenOptions" class="settings-field">
+          <label class="settings-field-label">关键词（可选）</label>
+          <input
+            v-model="wallhavenQueryInput"
+            class="settings-input"
+            placeholder="如 landscape、anime、nature"
+            @blur="applyWallhavenQuery"
+            @keydown.enter="applyWallhavenQuery"
+          />
+          <p class="settings-hint">
+            数据来自
+            <a class="settings-link" href="https://wallhaven.cc/" target="_blank" rel="noopener noreferrer">wallhaven.cc</a>
+            · 默认仅 SFW
           </p>
-          <div class="relative group">
-            <img :src="wallpaperUrl || backgroundUrl"
-              class="w-full max-w-[300px] h-[168px] object-cover rounded-lg border-2 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all duration-300"
-              alt="当前背景图片" loading="lazy" />
-          </div>
         </div>
 
-        <!-- 历史记录功能已移除 -->
-      </div>
+        <div v-if="showWallhavenOptions" class="settings-field">
+          <label class="settings-field-label">API Key（可选）</label>
+          <input
+            v-model="wallhavenApiKeyInput"
+            class="settings-input"
+            type="password"
+            placeholder="在 wallhaven 账号设置中获取"
+            autocomplete="off"
+            @blur="applyWallhavenApiKey"
+          />
+          <p class="settings-hint">不填也可使用；填写可提高请求额度</p>
+        </div>
 
-      <!-- 颜色背景选项 -->
-      <div v-if="wallpaperType === 'color'" class="space-y-4">
-        <p class="text-sm text-gray-600 dark:text-zinc-400 mb-2">
-          <span>选择背景颜色</span>
-        </p>
-        
-        <!-- 高级调色盘 -->
-        <div class="flex flex-col space-y-4">
-          <!-- 色相选择器 -->
-          <div class="relative w-full h-40 rounded-lg overflow-hidden border border-gray-200 dark:border-zinc-700 shadow-sm">
-            <!-- 色相条 -->
-            <div 
-              class="absolute top-0 left-0 w-full h-8 cursor-pointer"
-              :style="{
-                background: `linear-gradient(to right, 
-                  #ff0000 0%, 
-                  #ffff00 17%, 
-                  #00ff00 33%, 
-                  #00ffff 50%, 
-                  #0000ff 67%, 
-                  #ff00ff 83%, 
-                  #ff0000 100%)`
-              }"
-              @click="selectHue($event)"
-              @mousedown="startHueDrag"
-              ref="hueBar"
-            >
-              <div 
-                class="absolute top-0 h-8 w-4 border-2 border-white shadow-md transform -translate-x-1/2"
-                :style="{left: `${huePosition}%`, backgroundColor: hueColor}"
-              ></div>
-            </div>
-            
-            <!-- 饱和度/亮度选择器 -->
-            <div 
-              class="absolute top-10 left-0 right-0 bottom-0 cursor-pointer"
-              :style="{
-                backgroundColor: hueColor,
-                backgroundImage: `
-                  linear-gradient(to right, white, transparent),
-                  linear-gradient(to bottom, transparent, black)
-                `
-              }"
-              @click="selectSaturationBrightness($event)"
-              @mousedown="startSatBrightDrag"
-              ref="satBrightnessArea"
-            >
-              <div 
-                class="absolute w-4 h-4 border-2 border-white rounded-full shadow-md transform -translate-x-1/2 -translate-y-1/2"
-                :style="{left: `${saturationPosition}%`, top: `${brightnessPosition}%`}"
-              ></div>
-            </div>
-          </div>
-          
-          <!-- 颜色预览和输入框 -->
-          <div class="flex items-center space-x-3">
-            <div class="w-12 h-12 rounded-lg shadow-md" :style="{backgroundColor: colorInput}"></div>
-            <div class="flex-1">
-              <input 
-                type="text" 
-                v-model="colorInput" 
-                class="w-full px-3 py-2 rounded-md border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm"
-                placeholder="输入颜色代码（例如 #3498db）"
-                @blur="validateColorInput"
-              />
-            </div>
-          </div>
-          
-          <!-- 基础颜色选择器 -->
-          <div class="flex flex-wrap gap-2">
-            <div 
-              v-for="color in presetColors" 
-              :key="color" 
-              :style="{backgroundColor: color}" 
-              class="w-8 h-8 rounded-lg cursor-pointer border-2 transition-all duration-200 shadow-sm hover:shadow-md"
-              :class="colorInput === color ? 'border-blue-500 scale-110' : 'border-gray-200 dark:border-zinc-700 hover:scale-105'"
-              @click="selectPresetColor(color)"
-            ></div>
-          </div>
+        <!-- 自定义链接 -->
+        <div v-if="wallpaperSourceId === 'custom'" class="settings-field">
+          <label class="settings-field-label">图片链接</label>
+          <input
+            v-model="sourceUrlInput"
+            class="settings-input"
+            placeholder="https://example.com/wallpaper.jpg"
+            @blur="validateAndApplySourceUrl"
+            @keydown.enter="validateAndApplySourceUrl"
+          />
         </div>
-        
-        <!-- 当前颜色预览 -->
-        <div class="mt-4 p-6 rounded-lg shadow-inner" :style="{backgroundColor: colorInput}">
-          <p class="text-center font-medium" :class="isDarkColor(colorInput) ? 'text-white' : 'text-gray-800'">
-            颜色预览
-          </p>
-        </div>
-      </div>
 
-      <!-- 壁纸源选项 -->
-      <div v-if="wallpaperType === 'source'" class="space-y-3">
-        <p class="text-sm text-gray-600 dark:text-zinc-400 mb-2">
-          <span>使用在线壁纸源，壁纸将定期自动更新</span>
-        </p>
-        <div class="flex flex-row items-center space-x-2">
-          <MacInput v-model="sourceUrlInput" placeholder="请输入壁纸源链接" class="flex-1" @blur="validateAndApplySourceUrl" />
+        <div class="bg-row">
+          <button
+            type="button"
+            class="settings-btn settings-btn--primary"
+            :disabled="isRefreshingSource"
+            @click="refreshCurrentSource"
+          >
+            <Icon icon="fluent:arrow-sync-24-filled" class="text-sm" />
+            {{ isRefreshingSource ? '获取中…' : '换一张' }}
+          </button>
+          <a
+            v-if="currentSourceMeta?.homepage"
+            class="settings-link"
+            :href="currentSourceMeta.homepage"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            访问官网
+          </a>
         </div>
-        <div class="text-xs text-gray-500 dark:text-zinc-500 ml-7">
-          默认使用随机图片服务
-        </div>
-      </div>
-    </div>
+        <p class="settings-hint">按当前屏幕约 {{ targetResolutionLabel }} 筛选，避免分辨率过低</p>
+      </section>
+    </template>
   </div>
 </template>
 
@@ -189,13 +258,18 @@
 import { useNotification } from "@/composables/useNotification";
 import { useWallpaper } from "@/composables/useWallpaper";
 import { ref, watch, onMounted, onUnmounted, computed } from "vue";
-import MacCheckbox from "@/components/ui/MacCheckbox.vue";
-import MacInput from "@/components/ui/MacInput.vue";
-import MacButton from "@/components/ui/MacButton.vue";
+import { Icon } from "@iconify/vue";
 import { storage } from "@/utils/storage";
 import COS from "cos-js-sdk-v5";
 import { useDebounceFn } from "@vueuse/core";
 import { loadImage } from "@/utils/imageCache";
+import {
+  WALLPAPER_SOURCES,
+  getWallpaperSourceMeta,
+  supportsWallhavenQuery,
+  getTargetResolution,
+  type WallpaperSourceId,
+} from "@/utils/wallpaperSources";
 
 const { success, error } = useNotification();
 const {
@@ -203,14 +277,68 @@ const {
   wallpaperUrl,
   originalWallpaperUrl, // 添加原始URL变量
   sourceUrl,
+  wallpaperSourceId,
+  wallhavenQuery,
+  wallhavenApiKey,
   backgroundColor,
   showMask,
   updateWallpaper,
   updateSourceUrl,
+  updateWallpaperSource,
+  refreshSourceWallpaper,
+  updateWallhavenQuery,
+  updateWallhavenApiKey,
   updateBackgroundColor,
   loadState,
   toggleMask
 } = useWallpaper();
+
+const wallpaperSources = WALLPAPER_SOURCES;
+const isRefreshingSource = ref(false);
+const wallhavenQueryInput = ref(wallhavenQuery.value || '');
+const wallhavenApiKeyInput = ref(wallhavenApiKey.value || '');
+
+const showWallhavenOptions = computed(() => supportsWallhavenQuery(wallpaperSourceId.value));
+const currentSourceMeta = computed(() => getWallpaperSourceMeta(wallpaperSourceId.value));
+const targetResolutionLabel = computed(() => getTargetResolution().atleast);
+
+const selectSource = async (id: WallpaperSourceId) => {
+  if (isRefreshingSource.value) return;
+  isRefreshingSource.value = true;
+  try {
+    await updateWallpaperSource(id);
+    success('壁纸源已切换', getWallpaperSourceMeta(id).name);
+  } catch (e) {
+    error('切换壁纸源失败', e?.toString());
+  } finally {
+    isRefreshingSource.value = false;
+  }
+};
+
+const refreshCurrentSource = async () => {
+  if (isRefreshingSource.value) return;
+  isRefreshingSource.value = true;
+  try {
+    await refreshSourceWallpaper();
+    success('已更新壁纸', currentSourceMeta.value.name);
+  } catch (e) {
+    error('获取壁纸失败', e?.toString());
+  } finally {
+    isRefreshingSource.value = false;
+  }
+};
+
+const applyWallhavenQuery = async () => {
+  await updateWallhavenQuery(wallhavenQueryInput.value.trim());
+};
+
+const applyWallhavenApiKey = async () => {
+  await updateWallhavenApiKey(wallhavenApiKeyInput.value.trim());
+};
+
+const onMaskChange = (e: Event) => {
+  toggleMask((e.target as HTMLInputElement).checked);
+};
 
 // 本地状态只用于临时存储
 // 使用原始URL而不是缓存的数据URL
@@ -264,6 +392,8 @@ const presetColors = [
   '#f1c40f', // 黄色
   '#ffffff', // 白色
 ];
+
+const uniquePresets = computed(() => [...new Set(presetColors)]);
 
 // 添加上传状态
 const isUploading = ref(false);
@@ -325,7 +455,7 @@ const debouncedWatchWallpaperType = useDebounceFn(async (newType: string) => {
       backgroundUrl.value = url;
       if (url) await updateWallpaper("custom", url);
     } else if (newType === "source") {
-      await updateWallpaper("source", sourceUrl.value);
+      await updateWallpaper("source");
     } else if (newType === "color") {
       colorInput.value = backgroundColor.value;
       await updateWallpaper("color");
@@ -397,23 +527,21 @@ const applyBackgroundUrl = async () => {
   }
 };
 
-// 验证并应用壁纸源
+// 验证并应用自定义壁纸链接
 const validateAndApplySourceUrl = async () => {
-  if (isLoading.value) return;
+  if (isLoading.value || isRefreshingSource.value) return;
 
   isLoading.value = true;
   try {
-    // 确保URL不为空，如果为空则使用默认的随机图片服务
-    if (!sourceUrlInput.value.trim()) {
-      sourceUrlInput.value = "https://picsum.photos/1920/1080";
+    const url = sourceUrlInput.value.trim();
+    if (!url) {
+      error('请填写图片链接', '');
+      return;
     }
-    await updateSourceUrl(sourceUrlInput.value);
-    if (wallpaperType.value === "source") {
-      await updateWallpaper("source");
-    }
-    success("壁纸源已更新", "新的壁纸源已应用");
+    await updateSourceUrl(url);
+    success('自定义壁纸已应用', '');
   } catch (e) {
-    error("更新壁纸源失败", e?.toString());
+    error('更新壁纸失败', e?.toString());
   } finally {
     isLoading.value = false;
   }
@@ -853,8 +981,9 @@ onMounted(async () => {
     console.log('初始化背景URL:', backgroundUrl.value);
     recentImage.value = wallpaperUrl.value;
   } else if (wallpaperType.value === "source") {
-    // 如果是壁纸源，同步源URL到输入框
-    sourceUrlInput.value = sourceUrl.value || "https://picsum.photos/1920/1080";
+    sourceUrlInput.value = sourceUrl.value || '';
+    wallhavenQueryInput.value = wallhavenQuery.value || '';
+    wallhavenApiKeyInput.value = wallhavenApiKey.value || '';
   } else if (wallpaperType.value === "color") {
     // 如果是颜色背景，同步颜色到输入框
     colorInput.value = backgroundColor.value || "#3498db";
@@ -905,58 +1034,228 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.transition-all {
-  transition-property: all;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 200ms;
+.bg-settings {
+  gap: 20px;
 }
 
-/* 确保禁用状态的样式正确应用 */
-input:disabled,
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
+.bg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-/* 暗色模式适配 */
+.bg-row .settings-input {
+  flex: 1;
+}
+
+.source-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.source-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--ui-border);
+  background: var(--ui-surface-soft);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+
+.source-card:hover {
+  background: rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
+}
+
+.source-card--active {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+}
+
+.source-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.source-card-desc {
+  font-size: 11px;
+  color: var(--ui-text-muted);
+  line-height: 1.35;
+}
+
+.settings-link {
+  font-size: 12px;
+  color: var(--ui-accent);
+  text-decoration: none;
+}
+
+.settings-link:hover {
+  text-decoration: underline;
+}
+
 @media (prefers-color-scheme: dark) {
-
-  input:disabled,
-  button:disabled {
-    background-color: rgb(39, 39, 42);
+  .source-card:hover {
+    background: rgba(255, 255, 255, 0.06);
   }
 }
 
-/* 确保复选框可以正常点击 */
-input[type="checkbox"] {
-  cursor: pointer;
-  position: absolute;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  left: 0;
-  top: 0;
-  margin: 0;
-  padding: 0;
+.upload-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
 }
 
-/* 添加加载动画样式 */
-.loading-spinner {
-  width: 24px;
-  height: 24px;
-  border: 3px solid rgba(0, 0, 0, 0.1);
+.upload-title {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ui-text);
+}
+
+.preview-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preview-img {
+  width: 100%;
+  max-width: 300px;
+  height: 168px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1.5px solid var(--ui-accent);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.18);
+}
+
+.color-picker-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+}
+
+.hue-bar {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  cursor: crosshair;
+  background: linear-gradient(
+    to right,
+    #ff0000 0%, #ffff00 17%, #00ff00 33%,
+    #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%
+  );
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+  user-select: none;
+}
+
+.hue-thumb {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  border-top-color: #006bdf;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.sb-panel {
+  position: relative;
+  height: 120px;
+  border-radius: 7px;
+  cursor: crosshair;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+  user-select: none;
+}
+
+.sb-thumb {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.color-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.preset-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset-chip {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  transition: transform 0.1s, border-color 0.1s;
+}
+
+.preset-chip:hover {
+  transform: scale(1.12);
+}
+
+.preset-chip--active {
+  border-color: var(--ui-accent) !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+  transform: scale(1.08);
+}
+
+.color-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--ui-border);
+}
+
+.loading-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: var(--ui-accent);
   animation: spin 1s ease-in-out infinite;
+  flex-shrink: 0;
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
-/* 暗色模式适配 */
 @media (prefers-color-scheme: dark) {
   .loading-spinner {
     border-color: rgba(255, 255, 255, 0.1);

@@ -11,6 +11,7 @@ import BasicSettings from '@/components/settings/BasicSettings.vue'
 import SearchModeView from '@/components/modes/SearchModeView.vue'
 import { useWallpaper } from './composables/useWallpaper'
 import { storage } from '@/utils/storage'
+import { hydrateFaviconCache, refreshStaleFavicons } from '@/utils/iconCache'
 
 const {
   wallpaperType,
@@ -19,9 +20,11 @@ const {
   loadState,
   showMask,
   getWallpaperStyle,
+  refreshSourceWallpaper,
 } = useWallpaper()
 
 const isLoading = ref(false)
+const isRefreshingWallpaper = ref(false)
 
 // 顶部图标颜色：有壁纸或暗色 → 亮白；亮色无壁纸 → 深灰
 const isDark = ref(window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false)
@@ -45,15 +48,37 @@ function onSetup() {
   setup.value.show = true
 }
 
+async function onRefreshWallpaper() {
+  if (isRefreshingWallpaper.value || wallpaperType.value !== 'source') return
+  isRefreshingWallpaper.value = true
+  try {
+    await refreshSourceWallpaper()
+  } catch (e) {
+    console.error('刷新壁纸失败:', e)
+  } finally {
+    isRefreshingWallpaper.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     isLoading.value = false
 
-    // 预缓存书签，供搜索模式的 SearchBar 使用
+    // 恢复 favicon 内存缓存，供搜索栏瞬间命中
+    await hydrateFaviconCache()
+
+    // 预缓存书签，供搜索模式的 SearchBar / Alt+S 使用
+    let bookmarkUrls: string[] = []
     if ((window as any).chrome?.bookmarks) {
       const all = await (window as any).chrome.bookmarks.search({})
       const valid = all.filter((b: any) => b.url)
+      bookmarkUrls = valid.map((b: any) => b.url as string)
       await storage.set('cachedBookmarks', JSON.stringify(valid))
+    }
+
+    // 进入标签页：缺失或超过 7 天的收藏夹图标后台重新拉取（不阻塞首屏）
+    if (bookmarkUrls.length) {
+      refreshStaleFavicons(bookmarkUrls).catch(() => {})
     }
 
     await loadState()
@@ -134,15 +159,35 @@ onMounted(async () => {
         </Transition>
 
         <!-- 右上角操作区 -->
-        <div id="setup" class="flex items-center gap-4 z-[200]">
-          <!-- 设置按钮 -->
-          <Icon
-            icon="fluent:settings-24-filled"
-            class="text-2xl cursor-pointer hover:opacity-70 transition-all duration-200 hover:scale-110"
+        <div id="setup" class="z-[200]">
+          <button
+            type="button"
+            class="setup-btn"
             :style="{ color: topIconColor }"
+            title="设置"
             @click="onSetup"
-          />
+          >
+            <Icon icon="fluent:settings-24-filled" class="text-[22px]" />
+          </button>
         </div>
+
+        <!-- 壁纸源：右下角刷新 -->
+        <button
+          v-if="wallpaperType === 'source'"
+          type="button"
+          id="wallpaper-refresh"
+          class="setup-btn z-[200]"
+          :style="{ color: topIconColor }"
+          :disabled="isRefreshingWallpaper"
+          title="换一张壁纸"
+          @click="onRefreshWallpaper"
+        >
+          <Icon
+            icon="fluent:arrow-sync-24-filled"
+            class="text-[22px]"
+            :class="{ 'is-spinning': isRefreshingWallpaper }"
+          />
+        </button>
 
         <SearchModeView />
 
@@ -168,12 +213,14 @@ onMounted(async () => {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background-color: #f8f9fa;
+  background-color: #f4f4f5;
   transition: all 0.5s ease-in-out;
 }
 
-.dark #base {
-  background-color: #18181b;
+@media (prefers-color-scheme: dark) {
+  #base {
+    background-color: #18181b;
+  }
 }
 
 #base.has-background {
@@ -196,12 +243,50 @@ onMounted(async () => {
 
 #setup {
   position: fixed;
-  top: 20px;
-  right: 20px;
+  top: 18px;
+  right: 18px;
   z-index: 200;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
 }
 
+#wallpaper-refresh {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+}
+
+.setup-btn {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.setup-btn:hover:not(:disabled) {
+  opacity: 0.7;
+  transform: scale(1.08);
+}
+
+.setup-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.setup-btn:disabled {
+  cursor: wait;
+  opacity: 0.85;
+}
+
+.is-spinning {
+  animation: wallpaper-spin 0.8s linear infinite;
+}
+
+@keyframes wallpaper-spin {
+  to { transform: rotate(360deg); }
+}
 </style>

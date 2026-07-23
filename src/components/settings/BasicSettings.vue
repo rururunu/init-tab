@@ -1,5 +1,5 @@
 <template>
-  <div id="basic" class="rounded-r-[12px] p-6">
+  <div id="basic" class="settings-page">
     <div class="space-y-6">
 
       <!-- 时间显示设置 -->
@@ -495,20 +495,19 @@ onBeforeUnmount(() => {
 
 <style scoped>
 #basic {
-  height: 100%;
-  overflow-y: auto;
-  box-sizing: border-box;
+  /* settings-page 已处理滚动与内边距 */
+  padding-bottom: 28px;
 }
 
 /* 分区 */
 .setting-section { display: flex; flex-direction: column; gap: 12px; }
 .section-head { display: flex; flex-direction: column; gap: 2px; }
-.section-title { font-size: 13px; font-weight: 600; color: #1f2937; }
-.section-desc  { font-size: 11px; color: #9ca3af; }
+.section-title { font-size: 13px; font-weight: 600; color: var(--ui-text); }
+.section-desc  { font-size: 11px; color: var(--ui-text-muted); }
 
 .divider {
   height: 1px;
-  background: rgba(0,0,0,0.07);
+  background: var(--ui-border);
 }
 
 /* 切换开关列表 */
@@ -525,12 +524,12 @@ onBeforeUnmount(() => {
 .toggle-checkbox {
   width: 15px;
   height: 15px;
-  accent-color: #2563eb;
+  accent-color: var(--ui-accent);
   cursor: pointer;
   flex-shrink: 0;
 }
 
-.toggle-label { font-size: 13px; color: #374151; }
+.toggle-label { font-size: 13px; color: var(--ui-text-secondary); }
 
 /* 大小滑块行 */
 .slider-row {
