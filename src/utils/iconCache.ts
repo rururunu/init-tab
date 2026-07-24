@@ -91,6 +91,7 @@ const fetchAndEncode = async (faviconUrl: string): Promise<string> => {
   const response = await fetch(faviconUrl, { mode: 'cors', credentials: 'omit' });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const blob = await response.blob();
+  if (!blob.type.startsWith('image/') || blob.size < 16) throw new Error('Invalid favicon response');
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result as string);

@@ -17,7 +17,7 @@
       :style="{ borderRadius: rounded ? '4px' : '0' }"
       @error="onImgError"
     />
-    <!-- 失败：首字母 fallback -->
+    <!-- 失败：显示域名首字母 -->
     <span
       v-else
       class="favicon-fallback"
@@ -51,12 +51,11 @@ const props = withDefaults(defineProps<{
 
 const dataUrl = ref<string>('')
 const loading = ref(false)
-const failed = ref(false)
+let loadId = 0
 
-const domain = computed(() => getDomain(props.url))
 const fallbackLetter = computed(() => {
-  const d = domain.value
-  return d ? d.charAt(0).toUpperCase() : '?'
+  const domain = getDomain(props.url).replace(/^www\./i, '')
+  return domain ? domain.charAt(0).toUpperCase() : '?'
 })
 
 const imgClass = computed(() =>
@@ -67,8 +66,10 @@ const placeholderClass = computed(() =>
 )
 
 async function doLoad() {
+  const currentLoadId = ++loadId
+  dataUrl.value = ''
   if (!props.url) {
-    failed.value = true
+    loading.value = false
     return
   }
 
@@ -76,29 +77,27 @@ async function doLoad() {
   const cached = getCachedFavicon(props.url)
   if (cached) {
     dataUrl.value = cached
+    loading.value = false
     return
   }
 
   // 2. 异步加载
   loading.value = true
-  failed.value = false
   try {
     const result = await loadFavicon(props.url, Math.max(props.size, 32))
+    if (currentLoadId !== loadId) return
     if (result) {
       dataUrl.value = result
-    } else {
-      failed.value = true
     }
   } catch {
-    failed.value = true
+    // Keep dataUrl empty so the default website icon is rendered.
   } finally {
-    loading.value = false
+    if (currentLoadId === loadId) loading.value = false
   }
 }
 
 function onImgError() {
   dataUrl.value = ''
-  failed.value = true
 }
 
 watch(() => props.url, () => {
@@ -135,5 +134,12 @@ onMounted(() => {
   background: rgba(0, 0, 0, 0.06);
   user-select: none;
   flex-shrink: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .favicon-fallback {
+    color: #a1a1aa;
+    background: rgba(255, 255, 255, 0.08);
+  }
 }
 </style>

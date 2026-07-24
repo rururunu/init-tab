@@ -164,30 +164,66 @@
       </div>
     </section>
 
-    <template v-if="recommendationGroups.length">
-      <hr class="settings-divider" />
-      <section class="settings-section recommendation-section">
-        <div class="settings-section-head">
-          <h3 class="settings-section-title">推荐</h3>
+    <hr class="settings-divider" />
+    <section class="settings-section recommendation-section">
+      <div class="settings-section-head">
+        <h3 class="settings-section-title">快捷方式推荐</h3>
+      </div>
+
+      <div class="recommendation-browser">
+        <div class="recommendation-tabs" role="tablist" aria-label="快捷方式推荐分类" aria-orientation="vertical">
+          <button
+            v-for="tab in recommendationTabs"
+            :key="tab.id"
+            type="button"
+            role="tab"
+            class="recommendation-tab"
+            :class="{ 'recommendation-tab--active': activeRecommendationTab === tab.id }"
+            :aria-selected="activeRecommendationTab === tab.id"
+            @click="activeRecommendationTab = tab.id"
+          >
+            <Icon :icon="tab.icon" />
+            <span class="recommendation-tab-label">{{ tab.label }}</span>
+            <span class="recommendation-tab-count">{{ tab.count }}</span>
+          </button>
         </div>
 
-        <div v-for="group in recommendationGroups" :key="group.id" class="recommendation-group">
-          <span class="recommendation-group-title">{{ group.label }}</span>
+        <div class="recommendation-pane" role="tabpanel">
+          <div v-if="activeRecommendationTab === BOOKMARK_TAB" class="bookmark-tools">
+            <Icon icon="fluent:search-20-regular" />
+            <input
+              v-model="bookmarkQuery"
+              type="search"
+              class="settings-input bookmark-search"
+              placeholder="搜索收藏夹"
+              aria-label="搜索收藏夹"
+            />
+          </div>
+
           <div class="recommendation-list">
             <QuickLinkChip
-              v-for="link in group.links"
+              v-for="link in visibleRecommendationLinks"
               :key="link.id"
               class="recommendation-chip"
               :class="{ 'recommendation-chip--added': isRecommendationAdded(link.url) }"
               :link="link"
               :interactive="false"
               :aria-disabled="isRecommendationAdded(link.url)"
-              @click="addRecommendation(link)"
+              @click="addSuggestedLink(link)"
             />
+            <div v-if="isLoadingBookmarks && activeRecommendationTab === BOOKMARK_TAB" class="recommendation-empty">
+              正在读取收藏夹…
+            </div>
+            <div v-else-if="!visibleRecommendationLinks.length" class="recommendation-empty">
+              {{ activeRecommendationTab === BOOKMARK_TAB ? '没有找到收藏夹网页' : '当前分类暂无推荐' }}
+            </div>
           </div>
+          <p v-if="hiddenBookmarkCount > 0" class="settings-hint">
+            还有 {{ hiddenBookmarkCount }} 个结果，请输入关键词缩小范围
+          </p>
         </div>
-      </section>
-    </template>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -197,6 +233,7 @@ import { Icon } from '@iconify/vue';
 import QuickLinkChip from '@/components/ui/QuickLinkChip.vue';
 import { useNotification } from '@/composables/useNotification';
 import { useQuickLinks } from '@/composables/useQuickLinks';
+import { storage } from '@/utils/storage';
 import type { QuickLink, QuickLinkGroup, QuickLinkRecommendation } from '@/composables/useQuickLinks';
 
 const { error } = useNotification();
@@ -217,6 +254,12 @@ const popoverOffsets = ref<Record<string, number>>({});
 const isCreatingGroup = ref(false);
 const newGroupName = ref('');
 const newGroupInput = ref<HTMLInputElement | null>(null);
+const bookmarks = ref<QuickLink[]>([]);
+const bookmarkQuery = ref('');
+const isLoadingBookmarks = ref(false);
+const BOOKMARK_TAB = 'bookmarks';
+type RecommendationTabId = QuickLinkRecommendation['group'] | typeof BOOKMARK_TAB;
+const activeRecommendationTab = ref<RecommendationTabId>('personal');
 
 const GROUP_LABELS: Record<QuickLinkRecommendation['group'], string> = {
   personal: '为你推荐',
@@ -228,10 +271,57 @@ const GROUP_LABELS: Record<QuickLinkRecommendation['group'], string> = {
   media: '内容社区',
 };
 
+const GROUP_ICONS: Record<QuickLinkRecommendation['group'], string> = {
+  personal: 'fluent:person-star-20-regular',
+  trending: 'fluent:arrow-trending-20-regular',
+  popular: 'fluent:star-20-regular',
+  cn: 'fluent:globe-asia-australia-20-regular',
+  dev: 'fluent:code-20-regular',
+  ai: 'fluent:brain-circuit-20-regular',
+  media: 'fluent:video-clip-20-regular',
+};
+
 const recommendationGroups = computed(() =>
   (Object.keys(GROUP_LABELS) as QuickLinkRecommendation['group'][])
     .map((id) => ({ id, label: GROUP_LABELS[id], links: recommendations.value.filter((link) => link.group === id) }))
     .filter((group) => group.links.length)
+);
+
+const recommendationTabs = computed(() => [
+  ...recommendationGroups.value.map((group) => ({
+    id: group.id as RecommendationTabId,
+    label: group.label,
+    count: group.links.length,
+    icon: GROUP_ICONS[group.id],
+  })),
+  {
+    id: BOOKMARK_TAB as RecommendationTabId,
+    label: '收藏夹',
+    count: bookmarks.value.length,
+    icon: 'fluent:bookmark-multiple-20-regular',
+  },
+]);
+
+const filteredBookmarks = computed(() => {
+  const query = bookmarkQuery.value.trim().toLocaleLowerCase();
+  if (!query) return bookmarks.value;
+  return bookmarks.value.filter((bookmark) =>
+    bookmark.label.toLocaleLowerCase().includes(query) || bookmark.url.toLocaleLowerCase().includes(query)
+  );
+});
+
+const BOOKMARK_RENDER_LIMIT = 60;
+const visibleRecommendationLinks = computed<QuickLink[]>(() => {
+  if (activeRecommendationTab.value === BOOKMARK_TAB) {
+    return filteredBookmarks.value.slice(0, BOOKMARK_RENDER_LIMIT);
+  }
+  return recommendations.value.filter((link) => link.group === activeRecommendationTab.value);
+});
+
+const hiddenBookmarkCount = computed(() =>
+  activeRecommendationTab.value === BOOKMARK_TAB
+    ? Math.max(0, filteredBookmarks.value.length - BOOKMARK_RENDER_LIMIT)
+    : 0
 );
 
 const validGroupIds = computed(() => new Set(quickLinkGroups.value.map((group) => group.id)));
@@ -428,19 +518,64 @@ const onDropOnGroup = async (groupId?: string) => {
 
 const isRecommendationAdded = (url: string) => quickLinks.value.some((link) => link.url === url);
 
-const addRecommendation = async (recommendation: QuickLinkRecommendation) => {
-  if (isRecommendationAdded(recommendation.url)) return;
+const addSuggestedLink = async (link: Pick<QuickLink, 'label' | 'url'>) => {
+  if (isRecommendationAdded(link.url)) return;
   await saveQuickLinks([
     ...quickLinks.value,
     {
       id: globalThis.crypto?.randomUUID?.() ?? `quick-${Date.now()}`,
-      label: recommendation.label,
-      url: recommendation.url,
+      label: link.label,
+      url: link.url,
     },
   ]);
 };
 
-onMounted(() => Promise.all([loadQuickLinks(), loadRecommendations()]));
+const parseBookmarkNodes = (value: unknown): Array<{ id?: string; title?: string; url?: string }> => {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const loadBookmarks = async () => {
+  isLoadingBookmarks.value = true;
+  try {
+    const bookmarkApi = (globalThis as any).chrome?.bookmarks;
+    const raw = bookmarkApi
+      ? await bookmarkApi.search({})
+      : await storage.get('cachedBookmarks');
+    const byUrl = new Map<string, QuickLink>();
+    parseBookmarkNodes(raw).forEach((bookmark, index) => {
+      if (!bookmark.url) return;
+      try {
+        const url = new URL(bookmark.url);
+        if (!['http:', 'https:'].includes(url.protocol) || byUrl.has(url.href)) return;
+        byUrl.set(url.href, {
+          id: `bookmark-${bookmark.id || index}`,
+          label: bookmark.title?.trim() || url.hostname.replace(/^www\./, ''),
+          url: url.href,
+        });
+      } catch {
+        // Ignore browser-internal and malformed bookmark URLs.
+      }
+    });
+    bookmarks.value = [...byUrl.values()];
+  } catch (reason) {
+    bookmarks.value = [];
+    error('无法读取收藏夹', reason instanceof Error ? reason.message : String(reason));
+  } finally {
+    isLoadingBookmarks.value = false;
+  }
+};
+
+onMounted(async () => {
+  await Promise.all([loadQuickLinks(), loadRecommendations(), loadBookmarks()]);
+  if (!recommendationTabs.value.some((tab) => tab.id === activeRecommendationTab.value)) {
+    activeRecommendationTab.value = recommendationTabs.value[0]?.id ?? BOOKMARK_TAB;
+  }
+});
 </script>
 
 <style scoped>
@@ -850,28 +985,141 @@ onMounted(() => Promise.all([loadQuickLinks(), loadRecommendations()]));
 }
 
 .recommendation-section {
+  gap: 12px;
+}
+
+.recommendation-browser {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 136px minmax(0, 1fr);
+  align-items: start;
   gap: 16px;
 }
 
-.recommendation-group {
+.recommendation-tabs {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
+  padding-right: 12px;
+  border-right: 1px solid var(--ui-border);
 }
 
-.recommendation-group-title {
+.recommendation-tab {
+  position: relative;
+  width: 100%;
+  height: 36px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 6px;
   color: var(--ui-text-muted);
+  background: transparent;
+  cursor: pointer;
   font-size: 11px;
-  font-weight: 600;
+  text-align: left;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.recommendation-tab:hover {
+  color: var(--ui-text-secondary);
+  background: var(--ui-surface-soft);
+}
+
+.recommendation-tab--active {
+  color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+}
+
+.recommendation-tab--active::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--ui-accent);
+}
+
+.recommendation-tab > svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.recommendation-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recommendation-tab-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 5px;
+  color: var(--ui-text-muted);
+  background: rgba(127, 127, 127, 0.08);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.recommendation-tab--active .recommendation-tab-count {
+  color: var(--ui-accent);
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.recommendation-pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.bookmark-tools {
+  position: relative;
+  width: 100%;
+}
+
+.bookmark-tools > svg {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  z-index: 1;
+  width: 15px;
+  height: 15px;
+  color: var(--ui-text-muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.bookmark-search {
+  padding-left: 32px;
 }
 
 .recommendation-list {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
   display: flex;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 8px;
 }
 
 .recommendation-chip {
+  max-width: 100%;
   cursor: pointer;
 }
 
@@ -879,6 +1127,18 @@ onMounted(() => Promise.all([loadQuickLinks(), loadRecommendations()]));
 .recommendation-chip:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+.recommendation-empty {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: 7px;
+  color: var(--ui-text-muted);
+  font-size: 11px;
 }
 
 .quick-empty {
@@ -916,6 +1176,20 @@ onMounted(() => Promise.all([loadQuickLinks(), loadRecommendations()]));
 
   .quick-editor-trigger {
     max-width: 140px;
+  }
+
+  .recommendation-browser {
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .recommendation-tabs {
+    padding-right: 8px;
+  }
+
+  .recommendation-tab {
+    padding-inline: 6px;
+    gap: 5px;
   }
 }
 

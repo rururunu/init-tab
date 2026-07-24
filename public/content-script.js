@@ -22,6 +22,10 @@ function buildSearchUrl(template, query) {
 let jumpData     = defaultJumpData;
 let jumpToData   = new Map();
 let defaultKey   = 'bd';
+let quickLinks   = [];
+let quickLinkGroups = [];
+let showQuickLinks = true;
+let expandedQuickGroupId = null;
 
 // Shadow DOM 根（完全隔离宿主页 CSS）
 let gsShadow = null;
@@ -71,6 +75,14 @@ function getDomain(url) {
 
 function getFavicon(url) {
   try { return new URL(url).origin + '/favicon.ico'; } catch { return ''; }
+}
+
+function getInitialFavicon(pageUrl) {
+  const domain = getDomain(pageUrl).replace(/^www\./i, '');
+  const candidate = domain.charAt(0).toUpperCase();
+  const initial = /^[A-Z0-9]$/.test(candidate) ? candidate : '?';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="5" fill="#eef2f7"/><text x="12" y="16.2" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" font-weight="700" fill="#475569">${initial}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function parseFaviconEntry(stored) {
@@ -174,12 +186,24 @@ async function resolveFavicon(pageUrl, size = 32) {
  */
 async function applyFavicon(img, pageUrl) {
   if (!img) return;
+  const requestId = (img._gsFaviconRequestId || 0) + 1;
+  img._gsFaviconRequestId = requestId;
+  const useDefault = () => {
+    img.dataset.gsDefaultFavicon = 'true';
+    img.src = getInitialFavicon(pageUrl);
+    img.style.display = '';
+  };
+  img.onerror = () => {
+    if (img.dataset.gsDefaultFavicon !== 'true') useDefault();
+  };
+  useDefault();
+
   const dataUrl = await resolveFavicon(pageUrl);
+  if (img._gsFaviconRequestId !== requestId) return;
   if (dataUrl) {
+    delete img.dataset.gsDefaultFavicon;
     img.src = dataUrl;
     img.style.display = '';
-  } else {
-    img.src = getFavicon(pageUrl);
   }
 }
 
@@ -397,6 +421,103 @@ img {
     rgba(0, 0, 0, 0.08) 88%,
     transparent
   );
+}
+
+/* ── Quick links (read-only) ── */
+#gs-quick-links {
+  position: absolute;
+  top: calc(18vh + 72px);
+  left: 50%;
+  width: min(calc(100% - 32px), 560px);
+  padding: 0 8px;
+  box-sizing: border-box;
+  opacity: 0;
+  transform: translate(-50%, -6px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+#gs-overlay.show #gs-quick-links {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.gs-quick-flow,
+.gs-quick-group-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gs-quick-chip,
+.gs-quick-group-chip {
+  height: 36px;
+  max-width: 190px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 999px;
+  color: #374151;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.gs-quick-chip:hover,
+.gs-quick-group-chip:hover,
+.gs-quick-group-chip.open {
+  border-color: rgba(15, 23, 42, 0.3);
+  background: rgba(255, 255, 255, 0.94);
+  transform: translateY(-1px);
+}
+.gs-quick-chip img {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  object-fit: contain;
+}
+.gs-quick-chip > span,
+.gs-quick-group-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gs-quick-group-chip { padding-right: 8px; }
+.gs-quick-group-icons {
+  height: 24px;
+  padding-left: 5px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.gs-quick-group-icon {
+  width: 22px;
+  height: 22px;
+  margin-left: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.96);
+  border-radius: 50%;
+  background: #fff;
+  box-sizing: border-box;
+}
+.gs-quick-group-icon img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+.gs-quick-group-links {
+  width: 100%;
+  margin-top: 10px;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 #gs-dropdown {
@@ -627,6 +748,22 @@ img {
       transparent
     );
   }
+  .gs-quick-chip,
+  .gs-quick-group-chip {
+    color: #e5e7eb;
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(39, 39, 42, 0.72);
+  }
+  .gs-quick-chip:hover,
+  .gs-quick-group-chip:hover,
+  .gs-quick-group-chip.open {
+    border-color: rgba(255, 255, 255, 0.34);
+    background: rgba(63, 63, 70, 0.9);
+  }
+  .gs-quick-group-icon {
+    border-color: rgba(63, 63, 70, 0.96);
+    background: #27272a;
+  }
   #gs-dropdown { scrollbar-color: rgba(255, 255, 255, 0.15) transparent; }
   #gs-dropdown::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); }
   #gs-dropdown::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
@@ -676,6 +813,136 @@ let currentSearchQuery      = '';
 let suggestionEngineKey     = 'bd';
 let suggestAbortCtrl        = null;
 let suggestTimer            = null;
+
+function parseStoredList(value) {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function applyQuickLinks(rawLinks, rawGroups, rawVisibility = showQuickLinks) {
+  quickLinks = parseStoredList(rawLinks).filter((link) =>
+    link && typeof link.id === 'string' && typeof link.label === 'string' && typeof link.url === 'string'
+  );
+  quickLinkGroups = parseStoredList(rawGroups).filter((group) =>
+    group && typeof group.id === 'string' && typeof group.label === 'string'
+  );
+  showQuickLinks = rawVisibility !== false && rawVisibility !== 'false';
+  if (!quickLinkGroups.some((group) => group.id === expandedQuickGroupId)) {
+    expandedQuickGroupId = null;
+  }
+  refreshQuickLinksPanel();
+}
+
+function getQuickTopItems() {
+  const validGroupIds = new Set(quickLinkGroups.map((group) => group.id));
+  const ungrouped = quickLinks.filter((link) => !link.groupId || !validGroupIds.has(link.groupId));
+  const groups = quickLinkGroups
+    .map((group) => ({ ...group, links: quickLinks.filter((link) => link.groupId === group.id) }))
+    .filter((group) => group.links.length);
+  return [
+    ...ungrouped.map((link, index) => ({ kind: 'link', key: `link:${link.id}`, link, position: link.position, fallback: index })),
+    ...groups.map((group, index) => ({ kind: 'group', key: `group:${group.id}`, group, position: group.position, fallback: ungrouped.length + index })),
+  ].sort((a, b) => {
+    if (Number.isFinite(a.position) && Number.isFinite(b.position)) return a.position - b.position;
+    if (Number.isFinite(a.position)) return -1;
+    if (Number.isFinite(b.position)) return 1;
+    return a.fallback - b.fallback;
+  });
+}
+
+function createQuickLinkChip(link) {
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'gs-quick-chip';
+  chip.title = link.url;
+
+  const img = document.createElement('img');
+  img.alt = '';
+  applyFavicon(img, link.url);
+  const label = document.createElement('span');
+  label.textContent = link.label;
+  chip.appendChild(img);
+  chip.appendChild(label);
+  chip.addEventListener('click', () => {
+    window.open(link.url, '_blank', 'noopener,noreferrer');
+    if (animateHide) animateHide();
+  });
+  return chip;
+}
+
+function renderQuickLinksPanel() {
+  const panel = gs$('#gs-quick-links');
+  if (!panel) return false;
+  panel.innerHTML = '';
+  const items = getQuickTopItems();
+  if (!showQuickLinks || !items.length) return false;
+
+  const flow = document.createElement('div');
+  flow.className = 'gs-quick-flow';
+  items.forEach((item) => {
+    if (item.kind === 'link') {
+      flow.appendChild(createQuickLinkChip(item.link));
+      return;
+    }
+
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'gs-quick-group-chip' + (expandedQuickGroupId === item.group.id ? ' open' : '');
+    chip.setAttribute('aria-expanded', String(expandedQuickGroupId === item.group.id));
+    const label = document.createElement('span');
+    label.className = 'gs-quick-group-label';
+    label.textContent = item.group.label;
+    const icons = document.createElement('span');
+    icons.className = 'gs-quick-group-icons';
+    item.group.links.slice(0, 3).forEach((link) => {
+      const icon = document.createElement('span');
+      icon.className = 'gs-quick-group-icon';
+      const img = document.createElement('img');
+      img.alt = '';
+      applyFavicon(img, link.url);
+      icon.appendChild(img);
+      icons.appendChild(icon);
+    });
+    chip.appendChild(label);
+    chip.appendChild(icons);
+    chip.addEventListener('click', () => {
+      expandedQuickGroupId = expandedQuickGroupId === item.group.id ? null : item.group.id;
+      renderQuickLinksPanel();
+    });
+    flow.appendChild(chip);
+  });
+  panel.appendChild(flow);
+
+  const expanded = items.find((item) => item.kind === 'group' && item.group.id === expandedQuickGroupId);
+  if (expanded) {
+    const links = document.createElement('div');
+    links.className = 'gs-quick-group-links';
+    expanded.group.links.forEach((link) => links.appendChild(createQuickLinkChip(link)));
+    panel.appendChild(links);
+  }
+  return true;
+}
+
+function showQuickLinksPanel() {
+  const panel = gs$('#gs-quick-links');
+  if (!panel) return;
+  const hasLinks = renderQuickLinksPanel();
+  panel.style.display = hasLinks ? 'block' : 'none';
+}
+
+function hideQuickLinksPanel() {
+  const panel = gs$('#gs-quick-links');
+  if (panel) panel.style.display = 'none';
+}
+
+function refreshQuickLinksPanel() {
+  const input = gs$('#gs-input');
+  if (input && !input.value.trim() && isSearchVisible()) showQuickLinksPanel();
+}
 
 function getFilteredEngines(filter) {
   const q = (filter || '').toLowerCase();
@@ -1013,6 +1280,8 @@ function showDropdown(mode, results, selectedIndex) {
   const dropdown = gs$('#gs-dropdown');
   if (!divider || !dropdown) return;
 
+  hideQuickLinksPanel();
+
   divider.style.display  = 'block';
   dropdown.style.display = 'block';
   dropdown.innerHTML     = '';
@@ -1039,6 +1308,8 @@ function hideDropdown() {
   const dropdown = gs$('#gs-dropdown');
   if (divider)  divider.style.display  = 'none';
   if (dropdown) dropdown.style.display = 'none';
+  const input = gs$('#gs-input');
+  if (input && !input.value.trim() && isSearchVisible()) showQuickLinksPanel();
 }
 
 function findEngineByToken(token) {
@@ -1301,10 +1572,15 @@ const createSearchContainer = () => {
   dropdown.id = 'gs-dropdown';
   dropdown.style.display = 'none';
 
+  const quickLinksPanel = document.createElement('div');
+  quickLinksPanel.id = 'gs-quick-links';
+  quickLinksPanel.style.display = 'none';
+
   box.appendChild(inputRow);
   box.appendChild(divider);
   box.appendChild(dropdown);
   overlay.appendChild(box);
+  overlay.appendChild(quickLinksPanel);
   shadow.appendChild(overlay);
 
   overlay.addEventListener('click', (e) => {
@@ -1319,7 +1595,13 @@ const createSearchContainer = () => {
     selectedSuggestionIndex = -1;
     syncEngineBtnFromInput();
 
-    if (!value) { hideDropdown(); return; }
+    if (!value) {
+      hideDropdown();
+      showQuickLinksPanel();
+      return;
+    }
+
+    hideQuickLinksPanel();
 
     if (value.startsWith('*')) {
       if (suggestTimer) clearTimeout(suggestTimer);
@@ -1434,6 +1716,7 @@ const createSearchContainer = () => {
     overlay.classList.add('show');
     box.classList.add('show');
     updateEngineBtn();
+    showQuickLinksPanel();
     setTimeout(() => { input.focus(); input.select(); }, 40);
   };
 
@@ -1445,6 +1728,7 @@ const createSearchContainer = () => {
       overlay.style.display = 'none';
       host.style.pointerEvents = 'none';
       input.value = '';
+      hideQuickLinksPanel();
       hideDropdown();
     }, 280);
   }
@@ -1536,6 +1820,13 @@ if (isExtensionEnvironment) {
       }
       updateEngineBtn();
     }
+    if (changes.quickLinks || changes.quickLinkGroups || changes.showQuickLinks) {
+      applyQuickLinks(
+        changes.quickLinks ? changes.quickLinks.newValue : quickLinks,
+        changes.quickLinkGroups ? changes.quickLinkGroups.newValue : quickLinkGroups,
+        changes.showQuickLinks ? changes.showQuickLinks.newValue : showQuickLinks
+      );
+    }
   });
 }
 
@@ -1568,11 +1859,17 @@ async function jumpTo(jumpType, toData) {
 // ─── 初始化 ──────────────────────────────────────────────
 async function init() {
   try {
-    const savedKey  = await storage.get('defaultKey');
-    const savedData = await storage.get('jumpData');
+    const [savedKey, savedData, savedQuickLinks, savedQuickLinkGroups, savedQuickLinksVisibility] = await Promise.all([
+      storage.get('defaultKey'),
+      storage.get('jumpData'),
+      storage.get('quickLinks'),
+      storage.get('quickLinkGroups'),
+      storage.get('showQuickLinks'),
+    ]);
 
     defaultKey = savedKey || 'bd';
     applyJumpData(savedData);
+    applyQuickLinks(savedQuickLinks, savedQuickLinkGroups, savedQuickLinksVisibility);
 
     if (!savedKey)  await storage.set('defaultKey', 'bd');
     if (!savedData) await storage.set('jumpData', defaultJumpData);

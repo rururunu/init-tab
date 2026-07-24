@@ -27,7 +27,7 @@ const updateVisibleCount = () => {
   if (width <= 360) visibleCount.value = Math.min(2, props.select.length);
   else if (width <= 540) visibleCount.value = Math.min(3, props.select.length);
   else if (width <= 700) visibleCount.value = Math.min(4, props.select.length);
-  else visibleCount.value = props.select.length;
+  else visibleCount.value = Math.min(5, props.select.length);
   if (!overflowSelect.value.length) moreMenuOpen.value = false;
 };
 

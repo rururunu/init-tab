@@ -118,7 +118,7 @@ if (isExtensionEnvironment) {
         const res = await fetch(url, { credentials: 'omit' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
-        if (!blob || blob.size < 16) throw new Error('empty favicon');
+        if (!blob || !blob.type.startsWith('image/') || blob.size < 16) throw new Error('invalid favicon');
         return blobToDataUrl(blob);
     }
 

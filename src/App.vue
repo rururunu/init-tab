@@ -1,6 +1,6 @@
 /// <reference types="chrome" />
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref, shallowRef } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { Icon } from '@iconify/vue'
 import Dialog from './components/ui/dialog/Dialog.vue'
 import NotificationContainer from './components/ui/notification/NotificationContainer.vue'
@@ -8,21 +8,65 @@ import SearchModeView from '@/components/modes/SearchModeView.vue'
 import { useWallpaper } from './composables/useWallpaper'
 import { storage } from '@/utils/storage'
 import { hydrateFaviconCache, refreshStaleFavicons } from '@/utils/iconCache'
+import { useNotification } from '@/composables/useNotification'
+import { getWallpaperSourceMeta, type WallpaperSourceId } from '@/utils/wallpaperSources'
 
 const {
   wallpaperType,
   wallpaperUrl,
+  originalWallpaperUrl,
+  sourceUrl,
+  wallpaperSourceId,
   backgroundColor,
   loadState,
   showMask,
   getWallpaperStyle,
   refreshSourceWallpaper,
 } = useWallpaper()
+const { success, error } = useNotification()
 
 const isLoading = ref(false)
 const isRefreshingWallpaper = ref(false)
 const showQuickLinks = ref(true)
 const QUICK_LINKS_VISIBILITY_KEY = 'showQuickLinks'
+const FAVORITE_WALLPAPERS_KEY = 'favoriteWallpapers'
+
+interface FavoriteWallpaper {
+  url: string
+  sourceId: WallpaperSourceId
+  sourceName: string
+  savedAt: number
+}
+
+const favoriteWallpapers = ref<FavoriteWallpaper[]>([])
+let unsubFavoriteWallpapers: (() => void) | undefined
+
+const parseFavoriteWallpapers = (value: unknown): FavoriteWallpaper[] => {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value
+    return Array.isArray(parsed)
+      ? parsed.filter((item) => item && typeof item.url === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
+const currentWallpaperUrl = computed(() => {
+  if (!['source', 'custom'].includes(wallpaperType.value)) return ''
+  const value = originalWallpaperUrl.value || (wallpaperType.value === 'source' ? sourceUrl.value : '')
+  if (!value) return ''
+  try {
+    const url = new URL(value)
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : ''
+  } catch {
+    return ''
+  }
+})
+
+const isCurrentWallpaperFavorite = computed(() =>
+  favoriteWallpapers.value.some((favorite) => favorite.url === currentWallpaperUrl.value)
+)
 
 // 顶部图标颜色：有壁纸或暗色 → 亮白；亮色无壁纸 → 深灰
 const isDark = ref(window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false)
@@ -39,6 +83,7 @@ const BasicSettings = defineAsyncComponent(() => import('@/components/settings/B
 const BackgroundSettings = defineAsyncComponent(() => import('@/components/settings/BackgroundSettings.vue'))
 const SearchEngineSettings = defineAsyncComponent(() => import('@/components/settings/SearchEngineSettings.vue'))
 const QuickLinkSettings = defineAsyncComponent(() => import('@/components/settings/QuickLinkSettings.vue'))
+const DataTransferSettings = defineAsyncComponent(() => import('@/components/settings/DataTransferSettings.vue'))
 const TutorialSettings = defineAsyncComponent(() => import('@/components/settings/TutorialSettings.vue'))
 
 const setUpSelect = shallowRef([
@@ -46,6 +91,7 @@ const setUpSelect = shallowRef([
   { key: 'img',      icon: 'fluent-color:image-48',           label: '背景设置', in: BackgroundSettings },
   { key: 'jump',     icon: 'fluent-color:link-multiple-24',   label: '搜索引擎', in: SearchEngineSettings },
   { key: 'quick',    icon: 'fluent:flash-24-filled',           label: '快捷访问', in: QuickLinkSettings },
+  { key: 'transfer', icon: 'fluent:arrow-sync-24-regular',     label: '导入导出', in: DataTransferSettings },
   { key: 'tutorial', icon: 'fluent-color:book-open-48',       label: '使用教程', in: TutorialSettings },
 ])
 
@@ -56,6 +102,27 @@ function onSetup() {
 async function toggleQuickLinks() {
   showQuickLinks.value = !showQuickLinks.value
   await storage.set(QUICK_LINKS_VISIBILITY_KEY, String(showQuickLinks.value))
+}
+
+async function favoriteCurrentWallpaper() {
+  const url = currentWallpaperUrl.value
+  if (!url || isCurrentWallpaperFavorite.value) return
+  const sourceId: WallpaperSourceId = wallpaperType.value === 'custom' ? 'custom' : wallpaperSourceId.value
+  const favorite: FavoriteWallpaper = {
+    url,
+    sourceId,
+    sourceName: wallpaperType.value === 'custom' ? '自定义图片' : getWallpaperSourceMeta(sourceId).name,
+    savedAt: Date.now(),
+  }
+  const previous = favoriteWallpapers.value
+  favoriteWallpapers.value = [favorite, ...previous]
+  try {
+    await storage.set(FAVORITE_WALLPAPERS_KEY, JSON.stringify(favoriteWallpapers.value))
+    success('收藏成功', '当前壁纸已保存到插件')
+  } catch (e) {
+    favoriteWallpapers.value = previous
+    error('收藏失败', e instanceof Error ? e.message : String(e))
+  }
 }
 
 async function onRefreshWallpaper() {
@@ -76,6 +143,12 @@ onMounted(async () => {
 
     const savedQuickLinksVisibility = await storage.get<string | boolean>(QUICK_LINKS_VISIBILITY_KEY)
     showQuickLinks.value = savedQuickLinksVisibility !== false && savedQuickLinksVisibility !== 'false'
+    favoriteWallpapers.value = parseFavoriteWallpapers(
+      await storage.get<string | FavoriteWallpaper[]>(FAVORITE_WALLPAPERS_KEY)
+    )
+    unsubFavoriteWallpapers = storage.onChange(FAVORITE_WALLPAPERS_KEY, (changes) => {
+      favoriteWallpapers.value = parseFavoriteWallpapers(changes[FAVORITE_WALLPAPERS_KEY]?.newValue)
+    })
 
     // 恢复 favicon 内存缓存，供搜索栏瞬间命中
     await hydrateFaviconCache()
@@ -117,6 +190,10 @@ onMounted(async () => {
   } catch (e) {
     console.error('App init error:', e)
   }
+})
+
+onBeforeUnmount(() => {
+  unsubFavoriteWallpapers?.()
 })
 </script>
 
@@ -173,6 +250,21 @@ onMounted(async () => {
 
         <!-- 右上角操作区 -->
         <div id="setup" class="z-[200]">
+          <button
+            v-if="currentWallpaperUrl"
+            type="button"
+            class="setup-btn setup-btn--small"
+            :style="{ color: topIconColor }"
+            :title="isCurrentWallpaperFavorite ? '当前壁纸已收藏' : '收藏当前壁纸'"
+            :aria-label="isCurrentWallpaperFavorite ? '当前壁纸已收藏' : '收藏当前壁纸'"
+            :disabled="isCurrentWallpaperFavorite"
+            @click="favoriteCurrentWallpaper"
+          >
+            <Icon
+              :icon="isCurrentWallpaperFavorite ? 'fluent:star-24-filled' : 'fluent:star-add-24-regular'"
+              class="text-[20px]"
+            />
+          </button>
           <button
             type="button"
             class="setup-btn"
@@ -296,6 +388,11 @@ onMounted(async () => {
   box-shadow: none;
   cursor: pointer;
   transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.setup-btn--small {
+  width: 34px;
+  height: 34px;
 }
 
 .setup-btn:hover:not(:disabled) {
