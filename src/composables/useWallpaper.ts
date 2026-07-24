@@ -27,6 +27,7 @@ const sourceUrl = ref<string>(DEFAULT_SOURCE_URL);
 const wallpaperSourceId = ref<WallpaperSourceId>(DEFAULT_WALLPAPER_SOURCE_ID);
 const wallhavenQuery = ref<string>('');
 const wallhavenApiKey = ref<string>('');
+const wallhavenNsfw = ref<boolean>(false);
 const backgroundColor = ref<string>('#3498db'); // 默认背景颜色
 const themeColor = ref<string>('#495057'); // 默认主色调（时间和图标的颜色）
 const showMask = ref<boolean>(true); // 添加蒙版显示状态
@@ -60,6 +61,7 @@ export function useWallpaper() {
         wallpaperSourceId?: WallpaperSourceId;
         wallhavenQuery?: string;
         wallhavenApiKey?: string;
+        wallhavenNsfw?: boolean;
         backgroundColor: string;
         themeColor: string;
         showMask: boolean;
@@ -82,6 +84,7 @@ export function useWallpaper() {
         wallpaperSourceId: DEFAULT_WALLPAPER_SOURCE_ID,
         wallhavenQuery: '',
         wallhavenApiKey: '',
+        wallhavenNsfw: false,
         backgroundColor: '#3498db',
         themeColor: '#495057',
         showMask: true,
@@ -198,6 +201,7 @@ export function useWallpaper() {
             wallpaperSourceId.value = migrateSourceId(config);
             wallhavenQuery.value = config.wallhavenQuery || '';
             wallhavenApiKey.value = config.wallhavenApiKey || '';
+            wallhavenNsfw.value = Boolean(config.wallhavenNsfw && config.wallhavenApiKey);
             backgroundColor.value = config.backgroundColor || '#3498db';
             themeColor.value = config.themeColor || '#495057';
             showMask.value = config.showMask;
@@ -239,6 +243,7 @@ export function useWallpaper() {
             wallpaperSourceId.value = DEFAULT_WALLPAPER_SOURCE_ID;
             wallhavenQuery.value = '';
             wallhavenApiKey.value = '';
+            wallhavenNsfw.value = false;
             showMask.value = true;
             showTime.value = true;
             showSeconds.value = false;
@@ -259,6 +264,7 @@ export function useWallpaper() {
                 wallpaperSourceId: wallpaperSourceId.value,
                 wallhavenQuery: wallhavenQuery.value,
                 wallhavenApiKey: wallhavenApiKey.value,
+                wallhavenNsfw: wallhavenNsfw.value,
                 backgroundColor: backgroundColor.value,
                 themeColor: themeColor.value,
                 showMask: showMask.value,
@@ -312,6 +318,7 @@ export function useWallpaper() {
             customUrl: sourceUrl.value,
             wallhavenQuery: wallhavenQuery.value,
             wallhavenApiKey: wallhavenApiKey.value,
+            wallhavenNsfw: wallhavenNsfw.value,
         });
         originalWallpaperUrl.value = imageUrl;
         try {
@@ -322,6 +329,27 @@ export function useWallpaper() {
         }
         await saveState();
         return imageUrl;
+    };
+
+    // 应用已保存的源壁纸，不重新请求壁纸源。
+    const applySourceWallpaper = async (url: string, sourceId?: WallpaperSourceId) => {
+        wallpaperType.value = 'source';
+        if (sourceId) wallpaperSourceId.value = sourceId;
+        if (sourceId === 'custom') sourceUrl.value = url;
+        originalWallpaperUrl.value = url;
+
+        if (themeColor.value === '#495057') {
+            themeColor.value = '#ffffff';
+        }
+
+        try {
+            wallpaperUrl.value = await loadImage(url);
+        } catch (e) {
+            console.error('收藏壁纸加载失败:', e);
+            wallpaperUrl.value = url;
+        }
+
+        await saveState();
     };
 
     // 切换壁纸源预设
@@ -341,6 +369,12 @@ export function useWallpaper() {
 
     const updateWallhavenApiKey = async (key: string) => {
         wallhavenApiKey.value = key;
+        if (!key) wallhavenNsfw.value = false;
+        await saveState();
+    };
+
+    const updateWallhavenNsfw = async (enabled: boolean) => {
+        wallhavenNsfw.value = Boolean(enabled && wallhavenApiKey.value);
         await saveState();
     };
 
@@ -510,6 +544,7 @@ export function useWallpaper() {
         wallpaperSourceId,
         wallhavenQuery,
         wallhavenApiKey,
+        wallhavenNsfw,
         backgroundColor,
         themeColor,
         showMask,
@@ -526,8 +561,10 @@ export function useWallpaper() {
         updateSourceUrl,
         updateWallpaperSource,
         refreshSourceWallpaper,
+        applySourceWallpaper,
         updateWallhavenQuery,
         updateWallhavenApiKey,
+        updateWallhavenNsfw,
         updateBackgroundColor,
         updateThemeColor,
         updateShowTime,

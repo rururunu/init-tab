@@ -31,6 +31,24 @@
     </section>
 
     <section class="block">
+      <h3 class="block-title">Wallhaven API Key</h3>
+      <ol class="guide-steps">
+        <li>
+          登录或注册
+          <a href="https://wallhaven.cc/login" target="_blank" rel="noopener noreferrer">Wallhaven</a>
+          账户。
+        </li>
+        <li>
+          打开
+          <a href="https://wallhaven.cc/settings/account" target="_blank" rel="noopener noreferrer">账户设置</a>，
+          在 API Key 区域生成或复制密钥。
+        </li>
+        <li>进入「背景 → 壁纸源」，选择 Wallhaven，点击设置图标后粘贴 API Key。</li>
+        <li>需要成人内容时，先确保 Wallhaven 账户允许浏览 NSFW，再打开「允许 NSFW 内容」。</li>
+      </ol>
+    </section>
+
+    <section class="block">
       <h3 class="block-title">提示</h3>
       <ul class="tips">
         <li v-for="tip in tips" :key="tip">{{ tip }}</li>
@@ -151,6 +169,26 @@ const tips = [
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.guide-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.guide-steps a {
+  color: var(--ui-accent);
+  text-decoration: none;
+}
+
+.guide-steps a:hover {
+  text-decoration: underline;
 }
 
 .tips li {
