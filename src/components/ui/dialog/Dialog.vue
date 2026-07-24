@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
-import { onMounted, onBeforeUnmount, shallowRef, watch } from "vue";
+import { computed, onMounted, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 
 const props = defineProps<{
   show: boolean;
@@ -13,9 +13,28 @@ const emit = defineEmits<{
 }>();
 
 const currentSettingComponent = shallowRef<any>(props.select?.[0] ?? null);
+const visibleCount = ref(props.select.length);
+const moreMenuOpen = ref(false);
+
+const visibleSelect = computed(() => props.select.slice(0, visibleCount.value));
+const overflowSelect = computed(() => props.select.slice(visibleCount.value));
+const overflowIsActive = computed(() =>
+  overflowSelect.value.some((item) => item.key === currentSettingComponent.value?.key)
+);
+
+const updateVisibleCount = () => {
+  const width = window.innerWidth;
+  if (width <= 360) visibleCount.value = Math.min(2, props.select.length);
+  else if (width <= 540) visibleCount.value = Math.min(3, props.select.length);
+  else if (width <= 700) visibleCount.value = Math.min(4, props.select.length);
+  else visibleCount.value = props.select.length;
+  if (!overflowSelect.value.length) moreMenuOpen.value = false;
+};
 
 onMounted(() => {
   if (props.select?.[0]) setUpClick(props.select[0].key);
+  updateVisibleCount();
+  window.addEventListener("resize", updateVisibleCount);
 });
 
 const handleClose = () => {
@@ -25,6 +44,7 @@ const handleClose = () => {
 function setUpClick(select: string) {
   const found = props.select.find((item) => item.key === select);
   if (found) currentSettingComponent.value = found;
+  moreMenuOpen.value = false;
 }
 
 const onKeydown = (e: KeyboardEvent) => {
@@ -38,12 +58,16 @@ watch(
   () => props.show,
   (open) => {
     if (open) document.addEventListener("keydown", onKeydown);
-    else document.removeEventListener("keydown", onKeydown);
+    else {
+      moreMenuOpen.value = false;
+      document.removeEventListener("keydown", onKeydown);
+    }
   }
 );
 
 onBeforeUnmount(() => {
   document.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("resize", updateVisibleCount);
 });
 </script>
 
@@ -65,10 +89,10 @@ onBeforeUnmount(() => {
           </header>
 
           <!-- 导航 -->
-          <nav class="drawer-nav ui-scroll">
+          <nav class="drawer-nav">
             <button
-              v-for="(item, index) in select"
-              :key="index"
+              v-for="item in visibleSelect"
+              :key="item.key"
               type="button"
               class="nav-item"
               :class="{ 'nav-item--active': currentSettingComponent?.key === item.key }"
@@ -77,6 +101,32 @@ onBeforeUnmount(() => {
               <Icon :icon="item.icon" class="text-lg flex-shrink-0" />
               <span class="nav-label">{{ item.label }}</span>
             </button>
+            <div v-if="overflowSelect.length" class="nav-more-wrap">
+              <button
+                type="button"
+                class="nav-more"
+                :class="{ 'nav-more--active': overflowIsActive || moreMenuOpen }"
+                :aria-expanded="moreMenuOpen"
+                title="更多设置"
+                aria-label="更多设置"
+                @click="moreMenuOpen = !moreMenuOpen"
+              >
+                <Icon icon="fluent:more-horizontal-24-regular" />
+              </button>
+              <div v-if="moreMenuOpen" class="nav-more-menu">
+                <button
+                  v-for="item in overflowSelect"
+                  :key="item.key"
+                  type="button"
+                  class="nav-more-item"
+                  :class="{ 'nav-more-item--active': currentSettingComponent?.key === item.key }"
+                  @click="setUpClick(item.key)"
+                >
+                  <Icon :icon="item.icon" />
+                  <span>{{ item.label }}</span>
+                </button>
+              </div>
+            </div>
           </nav>
 
           <!-- 内容 -->
@@ -119,7 +169,7 @@ onBeforeUnmount(() => {
   right: 0;
   left: auto;
   bottom: 0;
-  width: min(440px, 92vw);
+  width: min(640px, 96vw);
   display: flex;
   flex-direction: column;
   background: rgba(250, 250, 250, 0.96);
@@ -168,10 +218,12 @@ onBeforeUnmount(() => {
 }
 
 .drawer-nav {
+  position: relative;
+  z-index: 10;
   display: flex;
   gap: 6px;
-  padding: 12px 12px 4px;
-  overflow-x: auto;
+  padding: 10px 16px;
+  overflow: visible;
   flex-shrink: 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.04);
 }
@@ -180,11 +232,11 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
-  padding: 0 12px;
+  height: 36px;
+  padding: 0 13px;
   border-radius: 999px;
-  border: none;
-  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.42);
   cursor: pointer;
   font-size: 12px;
   color: #4b5563;
@@ -195,20 +247,84 @@ onBeforeUnmount(() => {
 }
 
 .nav-item:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  border-color: rgba(37, 99, 235, 0.36);
+  background-color: rgba(37, 99, 235, 0.06);
 }
 
 .nav-item--active {
-  background-color: #2563eb;
-  color: #fff;
+  border-color: rgba(37, 99, 235, 0.62);
+  background-color: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
 }
 
 .nav-item--active:hover {
-  background-color: #1d4ed8;
+  background-color: rgba(37, 99, 235, 0.12);
 }
 
 .nav-label {
   font-weight: 500;
+}
+
+.nav-more-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.nav-more {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  color: #4b5563;
+  background: rgba(255, 255, 255, 0.42);
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.nav-more:hover,
+.nav-more--active {
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.62);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.nav-more-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 20;
+  width: 156px;
+  padding: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+}
+
+.nav-more-item {
+  width: 100%;
+  height: 36px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  color: #4b5563;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.nav-more-item:hover,
+.nav-more-item--active {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
 }
 
 .drawer-body {
@@ -272,11 +388,36 @@ onBeforeUnmount(() => {
 
   .nav-item {
     color: #a1a1aa;
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
   }
 
   .nav-item:hover {
     background-color: rgba(255, 255, 255, 0.06);
     color: #fff;
+  }
+
+  .nav-item--active,
+  .nav-item--active:hover {
+    color: #60a5fa;
+    border-color: rgba(96, 165, 250, 0.55);
+    background: rgba(59, 130, 246, 0.14);
+  }
+
+  .nav-more {
+    color: #a1a1aa;
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .nav-more-menu {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(39, 39, 42, 0.98);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  }
+
+  .nav-more-item {
+    color: #d4d4d8;
   }
 
   .drawer-body {
@@ -323,5 +464,15 @@ onBeforeUnmount(() => {
 .drawer-enter-to .drawer-panel,
 .drawer-leave-from .drawer-panel {
   transform: translateX(0);
+}
+
+@media (max-width: 560px) {
+  .drawer-panel {
+    width: 100vw;
+  }
+
+  .drawer-nav {
+    padding-inline: 12px;
+  }
 }
 </style>

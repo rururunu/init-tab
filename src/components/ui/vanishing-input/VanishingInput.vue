@@ -90,6 +90,7 @@ const emit = defineEmits(['submit', 'change', 'escape', 'focus', 'blur']);
 const canvasRef = templateRef<HTMLCanvasElement>('canvasRef');
 const inputRef = templateRef<HTMLInputElement>('inputRef');
 
+
 // normal refs
 const currentPlaceholder = ref<number>(0);
 const animating = ref<boolean>(false);

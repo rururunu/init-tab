@@ -19,7 +19,8 @@
     "storage",
     "unlimitedStorage",
     "commands",
-    "bookmarks"
+    "bookmarks",
+    "topSites"
   ],
   "optional_permissions": [
     "favicon",
@@ -66,7 +67,9 @@
     "https://picsum.photos/*",
     "https://*.picsum.photos/*",
     "https://wallhaven.cc/*",
-    "https://*.wallhaven.cc/*"
+    "https://*.wallhaven.cc/*",
+    "https://raw.githubusercontent.com/rururunu/init-tab/*",
+    "https://hn.algolia.com/*"
   ],
   "action": {
     "default_title": "LaunchPad",

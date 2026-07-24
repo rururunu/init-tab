@@ -47,6 +47,9 @@
         class="w-full transition-all duration-500 ease-in-out transform scale-100 translate-y-0"
       >
         <SearchBar />
+        <Transition name="quick-visibility">
+          <QuickLinks v-if="showQuickLinks" />
+        </Transition>
       </div>
     </div>
   </div>
@@ -57,7 +60,12 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import dayjs from 'dayjs'
 import BlurReveal from '@/components/ui/blur-reveal/BlurReveal.vue'
 import SearchBar from '@/components/ui/search-bar/SearchBar.vue'
+import QuickLinks from '@/components/ui/QuickLinks.vue'
 import { useWallpaper } from '@/composables/useWallpaper'
+
+withDefaults(defineProps<{ showQuickLinks?: boolean }>(), {
+  showQuickLinks: true,
+})
 
 const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 
@@ -109,3 +117,16 @@ onBeforeUnmount(() => {
   clearInterval(timer)
 })
 </script>
+
+<style scoped>
+.quick-visibility-enter-active,
+.quick-visibility-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.quick-visibility-enter-from,
+.quick-visibility-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+</style>

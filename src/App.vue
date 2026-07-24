@@ -1,13 +1,9 @@
 /// <reference types="chrome" />
 <script setup lang="ts">
-import { onMounted, ref, shallowRef, computed } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, shallowRef } from 'vue'
 import { Icon } from '@iconify/vue'
 import Dialog from './components/ui/dialog/Dialog.vue'
 import NotificationContainer from './components/ui/notification/NotificationContainer.vue'
-import BackgroundSettings from '@/components/settings/BackgroundSettings.vue'
-import SearchEngineSettings from '@/components/settings/SearchEngineSettings.vue'
-import TutorialSettings from '@/components/settings/TutorialSettings.vue'
-import BasicSettings from '@/components/settings/BasicSettings.vue'
 import SearchModeView from '@/components/modes/SearchModeView.vue'
 import { useWallpaper } from './composables/useWallpaper'
 import { storage } from '@/utils/storage'
@@ -25,6 +21,8 @@ const {
 
 const isLoading = ref(false)
 const isRefreshingWallpaper = ref(false)
+const showQuickLinks = ref(true)
+const QUICK_LINKS_VISIBILITY_KEY = 'showQuickLinks'
 
 // 顶部图标颜色：有壁纸或暗色 → 亮白；亮色无壁纸 → 深灰
 const isDark = ref(window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false)
@@ -37,15 +35,27 @@ const topIconColor = computed(() => {
 })
 
 const setup = ref({ show: false })
+const BasicSettings = defineAsyncComponent(() => import('@/components/settings/BasicSettings.vue'))
+const BackgroundSettings = defineAsyncComponent(() => import('@/components/settings/BackgroundSettings.vue'))
+const SearchEngineSettings = defineAsyncComponent(() => import('@/components/settings/SearchEngineSettings.vue'))
+const QuickLinkSettings = defineAsyncComponent(() => import('@/components/settings/QuickLinkSettings.vue'))
+const TutorialSettings = defineAsyncComponent(() => import('@/components/settings/TutorialSettings.vue'))
+
 const setUpSelect = shallowRef([
   { key: 'basic',    icon: 'fluent-color:settings-48',        label: '基础设置', in: BasicSettings },
   { key: 'img',      icon: 'fluent-color:image-48',           label: '背景设置', in: BackgroundSettings },
   { key: 'jump',     icon: 'fluent-color:link-multiple-24',   label: '搜索引擎', in: SearchEngineSettings },
+  { key: 'quick',    icon: 'fluent:flash-24-filled',           label: '快捷访问', in: QuickLinkSettings },
   { key: 'tutorial', icon: 'fluent-color:book-open-48',       label: '使用教程', in: TutorialSettings },
 ])
 
 function onSetup() {
   setup.value.show = true
+}
+
+async function toggleQuickLinks() {
+  showQuickLinks.value = !showQuickLinks.value
+  await storage.set(QUICK_LINKS_VISIBILITY_KEY, String(showQuickLinks.value))
 }
 
 async function onRefreshWallpaper() {
@@ -63,6 +73,9 @@ async function onRefreshWallpaper() {
 onMounted(async () => {
   try {
     isLoading.value = false
+
+    const savedQuickLinksVisibility = await storage.get<string | boolean>(QUICK_LINKS_VISIBILITY_KEY)
+    showQuickLinks.value = savedQuickLinksVisibility !== false && savedQuickLinksVisibility !== 'false'
 
     // 恢复 favicon 内存缓存，供搜索栏瞬间命中
     await hydrateFaviconCache()
@@ -164,6 +177,20 @@ onMounted(async () => {
             type="button"
             class="setup-btn"
             :style="{ color: topIconColor }"
+            :title="showQuickLinks ? '隐藏快捷访问' : '显示快捷访问'"
+            :aria-label="showQuickLinks ? '隐藏快捷访问' : '显示快捷访问'"
+            :aria-pressed="showQuickLinks"
+            @click="toggleQuickLinks"
+          >
+            <Icon
+              :icon="showQuickLinks ? 'fluent:eye-24-filled' : 'fluent:eye-off-24-filled'"
+              class="text-[22px]"
+            />
+          </button>
+          <button
+            type="button"
+            class="setup-btn"
+            :style="{ color: topIconColor }"
             title="设置"
             @click="onSetup"
           >
@@ -189,7 +216,7 @@ onMounted(async () => {
           />
         </button>
 
-        <SearchModeView />
+        <SearchModeView :show-quick-links="showQuickLinks" />
 
         <!-- 设置弹窗 -->
         <Dialog
@@ -246,6 +273,9 @@ onMounted(async () => {
   top: 18px;
   right: 18px;
   z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 #wallpaper-refresh {
