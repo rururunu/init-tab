@@ -94,6 +94,31 @@
             alt="当前背景图片"
             loading="lazy"
           />
+          <div class="source-actions">
+            <button
+              v-if="currentWallpaperUrl"
+              type="button"
+              class="settings-btn settings-btn--ghost"
+              :disabled="isSavingFavorite || isCurrentWallpaperFavorite"
+              @click="bookmarkCurrentWallpaper"
+            >
+              <Icon
+                :icon="isCurrentWallpaperFavorite ? 'fluent:bookmark-24-filled' : 'fluent:bookmark-add-24-regular'"
+                class="text-sm"
+              />
+              {{ isSavingFavorite ? '收藏中…' : isCurrentWallpaperFavorite ? '已收藏' : '收藏' }}
+            </button>
+            <a
+              v-if="currentWallpaperUrl"
+              class="settings-btn settings-btn--ghost source-visit-link"
+              :href="currentWallpaperUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Icon icon="fluent:open-24-regular" class="text-sm" />
+              访问
+            </a>
+          </div>
         </div>
       </section>
     </template>
@@ -167,9 +192,23 @@
     <template v-if="wallpaperType === 'source'">
       <hr class="settings-divider" />
       <section class="settings-section">
-        <div class="settings-section-head">
-          <h3 class="settings-section-title">壁纸源</h3>
-          <p class="settings-section-desc">选择在线源，可随时换一张；支持 Wallhaven</p>
+        <div class="settings-section-head source-section-head">
+          <div>
+            <h3 class="settings-section-title">壁纸源</h3>
+            <p class="settings-section-desc">选择来源后可一键换图</p>
+          </div>
+          <button
+            v-if="hasSourceOptions"
+            type="button"
+            class="source-config-btn"
+            :class="{ 'source-config-btn--active': sourceOptionsOpen }"
+            :aria-expanded="sourceOptionsOpen"
+            aria-label="配置当前壁纸源"
+            title="配置当前壁纸源"
+            @click="sourceOptionsOpen = !sourceOptionsOpen"
+          >
+            <Icon icon="fluent:settings-24-regular" />
+          </button>
         </div>
 
         <div class="source-grid">
@@ -179,78 +218,191 @@
             type="button"
             class="source-card"
             :class="{ 'source-card--active': wallpaperSourceId === src.id }"
+            :disabled="isRefreshingSource"
             @click="selectSource(src.id)"
           >
-            <span class="source-card-name">{{ src.name }}</span>
-            <span class="source-card-desc">{{ src.description }}</span>
+            <span class="source-card-icon" :class="`source-card-icon--${src.id}`">
+              <Icon :icon="sourceIcon(src.id)" class="text-base" />
+            </span>
+            <span class="source-card-copy">
+              <span class="source-card-name">{{ src.name }}</span>
+              <span class="source-card-desc">{{ src.description }}</span>
+            </span>
+            <Icon
+              v-if="wallpaperSourceId === src.id"
+              icon="fluent:checkmark-circle-24-filled"
+              class="source-card-check"
+            />
           </button>
         </div>
 
-        <!-- Wallhaven 选项 -->
-        <div v-if="showWallhavenOptions" class="settings-field">
-          <label class="settings-field-label">关键词（可选）</label>
-          <input
-            v-model="wallhavenQueryInput"
-            class="settings-input"
-            placeholder="如 landscape、anime、nature"
-            @blur="applyWallhavenQuery"
-            @keydown.enter="applyWallhavenQuery"
-          />
-          <p class="settings-hint">
-            数据来自
-            <a class="settings-link" href="https://wallhaven.cc/" target="_blank" rel="noopener noreferrer">wallhaven.cc</a>
-            · 默认仅 SFW
-          </p>
+        <!-- 当前源选项 -->
+        <div v-if="showSourceOptions" class="source-options">
+          <template v-if="showWallhavenOptions">
+            <div class="settings-field">
+              <label class="settings-field-label">关键词</label>
+              <input
+                v-model="wallhavenQueryInput"
+                class="settings-input"
+                placeholder="landscape、anime、nature…"
+                @blur="applyWallhavenQuery"
+                @keydown.enter="applyWallhavenQuery"
+              />
+            </div>
+            <div class="settings-field">
+              <label class="settings-field-label">API Key <span class="opt-tag">可选</span></label>
+              <input
+                v-model="wallhavenApiKeyInput"
+                class="settings-input"
+                type="password"
+                placeholder="提高请求额度"
+                autocomplete="off"
+                @blur="applyWallhavenApiKey"
+              />
+            </div>
+            <label class="settings-toggle-row" :class="{ 'is-disabled': !wallhavenApiKeyInput.trim() }">
+              <input
+                type="checkbox"
+                class="settings-toggle-input"
+                :checked="wallhavenNsfw"
+                :disabled="!wallhavenApiKeyInput.trim()"
+                @change="onWallhavenNsfwChange"
+              />
+              <span class="settings-toggle-label">允许 NSFW 内容</span>
+            </label>
+            <p class="settings-hint">
+              来自
+              <a class="settings-link" href="https://wallhaven.cc/" target="_blank" rel="noopener noreferrer">wallhaven.cc</a>
+              · NSFW 内容需要 API Key
+            </p>
+          </template>
+
+          <div v-else-if="wallpaperSourceId === 'custom'" class="settings-field">
+            <label class="settings-field-label">图片链接</label>
+            <input
+              v-model="sourceUrlInput"
+              class="settings-input"
+              placeholder="https://example.com/wallpaper.jpg"
+              @blur="validateAndApplySourceUrl"
+              @keydown.enter="validateAndApplySourceUrl"
+            />
+          </div>
         </div>
 
-        <div v-if="showWallhavenOptions" class="settings-field">
-          <label class="settings-field-label">API Key（可选）</label>
-          <input
-            v-model="wallhavenApiKeyInput"
-            class="settings-input"
-            type="password"
-            placeholder="在 wallhaven 账号设置中获取"
-            autocomplete="off"
-            @blur="applyWallhavenApiKey"
-          />
-          <p class="settings-hint">不填也可使用；填写可提高请求额度</p>
-        </div>
+        <!-- 预览 + 操作 -->
+        <div class="source-footer">
+          <div v-if="wallpaperUrl || sourceUrl" class="source-preview">
+            <img
+              :src="wallpaperUrl || sourceUrl"
+              alt="当前壁纸"
+              class="source-preview-img"
+              loading="lazy"
+            />
+            <div class="source-preview-meta">
+              <span class="source-preview-label">当前壁纸</span>
+              <span class="source-preview-res">约 {{ targetResolutionLabel }}</span>
+            </div>
+          </div>
 
-        <!-- 自定义链接 -->
-        <div v-if="wallpaperSourceId === 'custom'" class="settings-field">
-          <label class="settings-field-label">图片链接</label>
-          <input
-            v-model="sourceUrlInput"
-            class="settings-input"
-            placeholder="https://example.com/wallpaper.jpg"
-            @blur="validateAndApplySourceUrl"
-            @keydown.enter="validateAndApplySourceUrl"
-          />
+          <div class="source-actions">
+            <button
+              type="button"
+              class="settings-btn settings-btn--primary source-refresh-btn"
+              :disabled="isRefreshingSource"
+              @click="refreshCurrentSource"
+            >
+              <Icon
+                icon="fluent:arrow-sync-24-filled"
+                class="text-sm"
+                :class="{ 'is-spinning': isRefreshingSource }"
+              />
+              {{ isRefreshingSource ? '获取中…' : '换一张' }}
+            </button>
+            <button
+              v-if="currentWallpaperUrl"
+              type="button"
+              class="settings-btn settings-btn--ghost"
+              :disabled="isSavingFavorite || isCurrentWallpaperFavorite"
+              @click="bookmarkCurrentWallpaper"
+            >
+              <Icon
+                :icon="isCurrentWallpaperFavorite ? 'fluent:bookmark-24-filled' : 'fluent:bookmark-add-24-regular'"
+                class="text-sm"
+              />
+              {{ isSavingFavorite ? '收藏中…' : isCurrentWallpaperFavorite ? '已收藏' : '收藏' }}
+            </button>
+            <a
+              v-if="currentWallpaperUrl"
+              class="settings-btn settings-btn--ghost source-visit-link"
+              :href="currentWallpaperUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Icon icon="fluent:open-24-regular" class="text-sm" />
+              访问
+            </a>
+            <a
+              v-if="currentSourceMeta?.homepage"
+              class="source-home-link"
+              :href="currentSourceMeta.homepage"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              官网
+              <Icon icon="fluent:open-24-regular" class="text-xs" />
+            </a>
+          </div>
         </div>
-
-        <div class="bg-row">
-          <button
-            type="button"
-            class="settings-btn settings-btn--primary"
-            :disabled="isRefreshingSource"
-            @click="refreshCurrentSource"
-          >
-            <Icon icon="fluent:arrow-sync-24-filled" class="text-sm" />
-            {{ isRefreshingSource ? '获取中…' : '换一张' }}
-          </button>
-          <a
-            v-if="currentSourceMeta?.homepage"
-            class="settings-link"
-            :href="currentSourceMeta.homepage"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            访问官网
-          </a>
-        </div>
-        <p class="settings-hint">按当前屏幕约 {{ targetResolutionLabel }} 筛选，避免分辨率过低</p>
       </section>
     </template>
+
+    <hr class="settings-divider" />
+    <section class="settings-section">
+      <div class="settings-section-head">
+        <h3 class="settings-section-title">收藏的壁纸</h3>
+        <p class="settings-section-desc">{{ favoriteWallpapers.length }} 张</p>
+      </div>
+
+      <div v-if="favoriteWallpapers.length" class="favorite-grid">
+        <article v-for="favorite in favoriteWallpapers" :key="favorite.url" class="favorite-card">
+          <img :src="favorite.url" :alt="favorite.sourceName" class="favorite-img" loading="lazy" />
+          <div class="favorite-footer">
+            <span class="favorite-source">{{ favorite.sourceName }}</span>
+            <div class="favorite-actions">
+              <button
+                type="button"
+                class="favorite-action-btn"
+                aria-label="使用这张壁纸"
+                title="使用"
+                @click="useFavoriteWallpaper(favorite)"
+              >
+                <Icon icon="fluent:checkmark-24-regular" />
+              </button>
+              <a
+                class="favorite-action-btn"
+                :href="favorite.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="访问原始壁纸"
+                title="访问"
+              >
+                <Icon icon="fluent:open-24-regular" />
+              </a>
+              <button
+                type="button"
+                class="favorite-action-btn favorite-action-btn--danger"
+                aria-label="取消收藏"
+                title="取消收藏"
+                @click="removeFavoriteWallpaper(favorite.url)"
+              >
+                <Icon icon="fluent:delete-24-regular" />
+              </button>
+            </div>
+          </div>
+        </article>
+      </div>
+      <div v-else class="favorite-empty">还没有收藏壁纸</div>
+    </section>
   </div>
 </template>
 
@@ -280,14 +432,17 @@ const {
   wallpaperSourceId,
   wallhavenQuery,
   wallhavenApiKey,
+  wallhavenNsfw,
   backgroundColor,
   showMask,
   updateWallpaper,
   updateSourceUrl,
   updateWallpaperSource,
   refreshSourceWallpaper,
+  applySourceWallpaper,
   updateWallhavenQuery,
   updateWallhavenApiKey,
+  updateWallhavenNsfw,
   updateBackgroundColor,
   loadState,
   toggleMask
@@ -295,15 +450,80 @@ const {
 
 const wallpaperSources = WALLPAPER_SOURCES;
 const isRefreshingSource = ref(false);
+const isSavingFavorite = ref(false);
+const sourceOptionsOpen = ref(false);
 const wallhavenQueryInput = ref(wallhavenQuery.value || '');
 const wallhavenApiKeyInput = ref(wallhavenApiKey.value || '');
 
 const showWallhavenOptions = computed(() => supportsWallhavenQuery(wallpaperSourceId.value));
+const hasSourceOptions = computed(
+  () => showWallhavenOptions.value || wallpaperSourceId.value === 'custom'
+);
+const showSourceOptions = computed(
+  () => hasSourceOptions.value && sourceOptionsOpen.value
+);
 const currentSourceMeta = computed(() => getWallpaperSourceMeta(wallpaperSourceId.value));
 const targetResolutionLabel = computed(() => getTargetResolution().atleast);
+const currentWallpaperUrl = computed(() => {
+  if (!['source', 'custom'].includes(wallpaperType.value)) return '';
+  const url = originalWallpaperUrl.value || (wallpaperType.value === 'source' ? sourceUrl.value : '');
+  if (!url) return '';
+
+  try {
+    const parsed = new URL(url);
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
+  } catch {
+    return '';
+  }
+});
+const currentFavoriteSourceId = computed<WallpaperSourceId>(() =>
+  wallpaperType.value === 'custom' ? 'custom' : wallpaperSourceId.value
+);
+const currentFavoriteSourceName = computed(() =>
+  wallpaperType.value === 'custom' ? '自定义图片' : currentSourceMeta.value.name
+);
+
+interface FavoriteWallpaper {
+  url: string;
+  sourceId: WallpaperSourceId;
+  sourceName: string;
+  savedAt: number;
+}
+
+const FAVORITE_WALLPAPERS_KEY = 'favoriteWallpapers';
+const favoriteWallpapers = ref<FavoriteWallpaper[]>([]);
+const isCurrentWallpaperFavorite = computed(() =>
+  favoriteWallpapers.value.some((favorite) => favorite.url === currentWallpaperUrl.value)
+);
+
+const persistFavoriteWallpapers = () =>
+  storage.set(FAVORITE_WALLPAPERS_KEY, JSON.stringify(favoriteWallpapers.value));
+
+const loadFavoriteWallpapers = async () => {
+  const stored = await storage.get<string | FavoriteWallpaper[]>(FAVORITE_WALLPAPERS_KEY);
+  try {
+    const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
+    favoriteWallpapers.value = Array.isArray(parsed)
+      ? parsed.filter((favorite) => favorite && typeof favorite.url === 'string')
+      : [];
+  } catch {
+    favoriteWallpapers.value = [];
+  }
+};
+
+const SOURCE_ICONS: Record<WallpaperSourceId, string> = {
+  picsum: 'fluent:image-sparkle-24-regular',
+  bing: 'fluent:weather-sunny-24-regular',
+  'wallhaven-random': 'fluent:arrow-shuffle-24-regular',
+  'wallhaven-toplist': 'fluent:fire-24-regular',
+  custom: 'fluent:link-24-regular',
+};
+
+const sourceIcon = (id: WallpaperSourceId) => SOURCE_ICONS[id] || 'fluent:image-24-regular';
 
 const selectSource = async (id: WallpaperSourceId) => {
   if (isRefreshingSource.value) return;
+  sourceOptionsOpen.value = false;
   isRefreshingSource.value = true;
   try {
     await updateWallpaperSource(id);
@@ -328,12 +548,58 @@ const refreshCurrentSource = async () => {
   }
 };
 
+const bookmarkCurrentWallpaper = async () => {
+  const url = currentWallpaperUrl.value;
+  if (!url || isSavingFavorite.value || isCurrentWallpaperFavorite.value) return;
+
+  isSavingFavorite.value = true;
+  try {
+    favoriteWallpapers.value.unshift({
+      url,
+      sourceId: currentFavoriteSourceId.value,
+      sourceName: currentFavoriteSourceName.value,
+      savedAt: Date.now(),
+    });
+    await persistFavoriteWallpapers();
+    success('收藏成功', '当前壁纸已保存到插件');
+  } catch (e) {
+    error('收藏失败', e instanceof Error ? e.message : String(e));
+  } finally {
+    isSavingFavorite.value = false;
+  }
+};
+
+const useFavoriteWallpaper = async (favorite: FavoriteWallpaper) => {
+  try {
+    await applySourceWallpaper(favorite.url, favorite.sourceId);
+    success('壁纸已应用', favorite.sourceName);
+  } catch (e) {
+    error('应用壁纸失败', e instanceof Error ? e.message : String(e));
+  }
+};
+
+const removeFavoriteWallpaper = async (url: string) => {
+  const previous = favoriteWallpapers.value;
+  favoriteWallpapers.value = previous.filter((favorite) => favorite.url !== url);
+  try {
+    await persistFavoriteWallpapers();
+    success('已取消收藏', '壁纸已从插件收藏中移除');
+  } catch (e) {
+    favoriteWallpapers.value = previous;
+    error('取消收藏失败', e instanceof Error ? e.message : String(e));
+  }
+};
+
 const applyWallhavenQuery = async () => {
   await updateWallhavenQuery(wallhavenQueryInput.value.trim());
 };
 
 const applyWallhavenApiKey = async () => {
   await updateWallhavenApiKey(wallhavenApiKeyInput.value.trim());
+};
+
+const onWallhavenNsfwChange = async (event: Event) => {
+  await updateWallhavenNsfw((event.target as HTMLInputElement).checked);
 };
 
 const onMaskChange = (e: Event) => {
@@ -972,7 +1238,7 @@ const hexToHsl = (hex: string): {h: number, s: number, l: number} => {
 // 组件挂载时加载状态
 onMounted(async () => {
   // 静默加载状态，不显示加载动画
-  await loadState();
+  await Promise.all([loadState(), loadFavoriteWallpapers()]);
 
   // 根据当前壁纸类型设置相应的状态
   if (wallpaperType.value === "custom") {
@@ -1054,40 +1320,299 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.source-card {
+.source-section-head {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: flex-start;
-  gap: 4px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1.5px solid var(--ui-border);
-  background: var(--ui-surface-soft);
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.source-card:hover {
-  background: rgba(0, 0, 0, 0.04);
-  transform: translateY(-1px);
+.source-config-btn {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 8px;
+  background: var(--ui-surface-soft);
+  color: var(--ui-text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.source-config-btn:hover,
+.source-config-btn--active {
+  color: var(--ui-accent);
+  border-color: rgba(37, 99, 235, 0.4);
+  background: var(--ui-accent-soft);
+}
+
+.source-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.source-card:hover:not(:disabled) {
+  border-color: var(--ui-border-strong);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.source-card:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .source-card--active {
-  border-color: var(--ui-accent);
+  border-color: rgba(37, 99, 235, 0.45);
   background: var(--ui-accent-soft);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.08);
+}
+
+.source-card-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #64748b;
+  background: var(--ui-surface-soft);
+}
+
+.source-card--active .source-card-icon {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.source-card-icon--bing { color: #0ea5e9; }
+.source-card-icon--wallhaven-random,
+.source-card-icon--wallhaven-toplist { color: #8b5cf6; }
+.source-card-icon--custom { color: #64748b; }
+
+.source-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+  padding-right: 14px;
 }
 
 .source-card-name {
   font-size: 13px;
   font-weight: 600;
   color: var(--ui-text);
+  line-height: 1.2;
 }
 
 .source-card-desc {
   font-size: 11px;
   color: var(--ui-text-muted);
   line-height: 1.35;
+}
+
+.source-card-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 16px;
+  color: #2563eb;
+}
+
+.source-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface-soft);
+}
+
+.opt-tag {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ui-text-muted);
+  margin-left: 4px;
+}
+
+.source-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.source-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+
+.source-preview-img {
+  width: 88px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+  background: var(--ui-surface-soft);
+}
+
+.source-preview-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.source-preview-label {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--ui-text);
+}
+
+.source-preview-res {
+  font-size: 11px;
+  color: var(--ui-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.source-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.source-refresh-btn {
+  min-width: 108px;
+}
+
+.source-visit-link {
+  text-decoration: none;
+}
+
+.favorite-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.favorite-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-surface);
+}
+
+.favorite-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--ui-surface-soft);
+}
+
+.favorite-footer {
+  min-height: 40px;
+  padding: 6px 7px 6px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.favorite-source {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+}
+
+.favorite-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.favorite-action-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-text-muted);
+  cursor: pointer;
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.favorite-action-btn:hover {
+  color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+}
+
+.favorite-action-btn--danger:hover {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.favorite-empty {
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: 8px;
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+
+.source-home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ui-text-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.source-home-link:hover {
+  color: var(--ui-accent);
+}
+
+.is-spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .settings-link {
@@ -1101,8 +1626,18 @@ onUnmounted(() => {
 }
 
 @media (prefers-color-scheme: dark) {
-  .source-card:hover {
+  .source-card:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.06);
+  }
+
+  .source-card--active {
+    background: rgba(37, 99, 235, 0.16);
+  }
+}
+
+@media (max-width: 520px) {
+  .favorite-grid {
+    grid-template-columns: 1fr;
   }
 }
 

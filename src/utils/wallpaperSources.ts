@@ -32,6 +32,8 @@ export interface ResolveWallpaperOptions {
   wallhavenQuery?: string;
   /** Wallhaven API Key（可选，提高额度；SFW 可不填） */
   wallhavenApiKey?: string;
+  /** 是否允许 Wallhaven 返回 NSFW 内容（需要 API Key） */
+  wallhavenNsfw?: boolean;
 }
 
 export interface ScreenResolution {
@@ -46,7 +48,7 @@ export interface ScreenResolution {
 export const WALLPAPER_SOURCES: WallpaperSourceMeta[] = [
   {
     id: 'picsum',
-    name: 'Lorem Picsum',
+    name: 'Picsum',
     description: '随机高质量照片',
     kind: 'direct',
     homepage: 'https://picsum.photos',
@@ -55,28 +57,28 @@ export const WALLPAPER_SOURCES: WallpaperSourceMeta[] = [
   {
     id: 'bing',
     name: '必应每日',
-    description: 'Bing 每日壁纸',
+    description: '每日精选壁纸',
     kind: 'api',
     homepage: 'https://www.bing.com',
   },
   {
     id: 'wallhaven-random',
-    name: 'Wallhaven 随机',
-    description: 'wallhaven.cc 随机 SFW 壁纸',
+    name: 'Wallhaven',
+    description: '随机 SFW 壁纸',
     kind: 'api',
     homepage: 'https://wallhaven.cc',
   },
   {
     id: 'wallhaven-toplist',
     name: 'Wallhaven 热门',
-    description: 'wallhaven.cc 本月热门',
+    description: '本月热门精选',
     kind: 'api',
     homepage: 'https://wallhaven.cc/toplist',
   },
   {
     id: 'custom',
     name: '自定义链接',
-    description: '填写可直接访问的图片 URL',
+    description: '使用图片 URL',
     kind: 'direct',
   },
 ];
@@ -263,8 +265,10 @@ async function resolveWallhaven(
   options: ResolveWallpaperOptions = {},
   target: ScreenResolution
 ): Promise<string> {
+  const key = options.wallhavenApiKey?.trim();
+  const allowNsfw = Boolean(options.wallhavenNsfw && key);
   const params = new URLSearchParams({
-    purity: '100', // 仅 SFW
+    purity: allowNsfw ? '111' : '100',
     categories: '111',
     atleast: target.atleast,
     ratios: target.ratio,
@@ -283,7 +287,6 @@ async function resolveWallhaven(
   const q = options.wallhavenQuery?.trim();
   if (q) params.set('q', q);
 
-  const key = options.wallhavenApiKey?.trim();
   if (key) params.set('apikey', key);
 
   const fetchPage = async (searchParams: URLSearchParams) => {

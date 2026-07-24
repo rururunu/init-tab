@@ -1,4 +1,4 @@
-# INIT TAB ✨
+# LaunchPad ✨
 
 打开新标签页，也可以很有意思。
 
