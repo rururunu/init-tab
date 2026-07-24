@@ -1,58 +1,61 @@
 <template>
   <div class="settings-page transfer-page">
-    <section class="settings-section">
-      <div class="settings-section-head">
-        <h3 class="settings-section-title">导出当前配置</h3>
-        <p class="settings-section-desc">下载基础设置、背景与收藏壁纸、搜索引擎和快捷访问。</p>
-      </div>
-      <div class="settings-card transfer-tool">
-        <Icon icon="fluent:arrow-download-24-regular" class="transfer-icon" />
-        <div class="transfer-copy">
-          <strong>保存为 JSON 文件</strong>
-          <span>文件可能包含自定义壁纸数据和 Wallhaven API Key，请妥善保管。</span>
-        </div>
-        <button type="button" class="settings-btn settings-btn--primary" :disabled="isExporting" @click="exportSettings">
-          <Icon icon="fluent:arrow-download-20-regular" />
-          {{ isExporting ? '正在导出' : '导出配置' }}
-        </button>
-      </div>
-    </section>
+    <input ref="fileInput" class="file-input" type="file" accept="application/json,.json" @change="selectFile" />
 
-    <hr class="settings-divider" />
+    <div class="transfer-shell">
+      <button
+        type="button"
+        class="transfer-card transfer-card--export"
+        :disabled="isExporting"
+        @click="exportSettings"
+      >
+        <span class="transfer-card-icon">
+          <Icon icon="fluent:arrow-download-24-regular" />
+        </span>
+        <span class="transfer-card-text">
+          <strong>{{ isExporting ? '正在导出' : '导出配置' }}</strong>
+          <span>保存 JSON</span>
+        </span>
+      </button>
 
-    <section class="settings-section">
-      <div class="settings-section-head">
-        <h3 class="settings-section-title">导入配置</h3>
-        <p class="settings-section-desc">选择由 LaunchPad 导出的 JSON 文件，确认后覆盖当前四类配置。</p>
-      </div>
-      <input ref="fileInput" class="file-input" type="file" accept="application/json,.json" @change="selectFile" />
-      <div class="settings-card transfer-tool">
-        <Icon icon="fluent:arrow-upload-24-regular" class="transfer-icon" />
-        <div class="transfer-copy">
-          <strong>{{ selectedFileName || '尚未选择配置文件' }}</strong>
-          <span v-if="summary">
-            {{ summary.searchEngines }} 个搜索引擎 · {{ summary.quickLinks }} 个快捷访问 ·
-            {{ summary.quickLinkGroups }} 个分组 · {{ summary.favoriteWallpapers }} 张收藏壁纸
+      <button
+        type="button"
+        class="transfer-card transfer-card--import"
+        :class="{ 'is-dragging': isDragging }"
+        :disabled="isImporting"
+        @click="fileInput?.click()"
+        @dragenter.prevent="isDragging = true"
+        @dragover.prevent="isDragging = true"
+        @dragleave.prevent="isDragging = false"
+        @drop.prevent="selectDroppedFile"
+      >
+        <span class="transfer-card-icon">
+          <Icon icon="fluent:arrow-upload-24-regular" />
+        </span>
+        <span class="transfer-card-text">
+          <strong>导入配置</strong>
+          <span>{{ pendingConfig ? selectedFileName : '选择或拖入 JSON' }}</span>
+        </span>
+      </button>
+
+      <div v-if="pendingConfig" class="upload-card">
+        <div class="upload-file">
+          <span class="upload-icon">
+            <Icon icon="fluent:document-one-page-24-regular" />
           </span>
-          <span v-else>导入前会检查文件格式和数据结构。</span>
+          <span class="upload-name">{{ selectedFileName }}</span>
         </div>
-        <button type="button" class="settings-btn settings-btn--ghost" :disabled="isImporting" @click="fileInput?.click()">
-          <Icon icon="fluent:folder-open-20-regular" />
-          选择文件
-        </button>
-      </div>
-
-      <div v-if="pendingConfig" class="import-confirm">
-        <div class="import-warning">
-          <Icon icon="fluent:warning-20-regular" />
-          <span>导入会覆盖当前配置，此操作不会删除浏览器书签。</span>
+        <div class="upload-actions">
+          <button type="button" class="settings-btn settings-btn--ghost transfer-btn" :disabled="isImporting" @click="clearSelection">
+            取消
+          </button>
+          <button type="button" class="settings-btn settings-btn--primary transfer-btn" :disabled="isImporting" @click="confirmImport">
+            <Icon icon="fluent:checkmark-20-regular" />
+            {{ isImporting ? '正在导入' : '确认导入' }}
+          </button>
         </div>
-        <button type="button" class="settings-btn settings-btn--primary" :disabled="isImporting" @click="confirmImport">
-          <Icon icon="fluent:checkmark-20-regular" />
-          {{ isImporting ? '正在导入' : '确认导入' }}
-        </button>
       </div>
-    </section>
+    </div>
   </div>
 </template>
 
@@ -62,20 +65,18 @@ import { Icon } from '@iconify/vue'
 import { useNotification } from '@/composables/useNotification'
 import {
   createConfigExport,
-  getConfigSummary,
   importConfig,
   parseConfigFile,
   type ConfigFile,
-  type ConfigSummary,
 } from '@/utils/configTransfer'
 
 const { success, error } = useNotification()
 const fileInput = ref<HTMLInputElement | null>(null)
 const selectedFileName = ref('')
 const pendingConfig = ref<ConfigFile | null>(null)
-const summary = ref<ConfigSummary | null>(null)
 const isExporting = ref(false)
 const isImporting = ref(false)
+const isDragging = ref(false)
 
 const exportSettings = async () => {
   if (isExporting.value) return
@@ -100,20 +101,33 @@ const exportSettings = async () => {
 const selectFile = async (event: Event) => {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
+  await prepareImportFile(file)
+}
+
+const selectDroppedFile = async (event: DragEvent) => {
+  isDragging.value = false
+  await prepareImportFile(event.dataTransfer?.files?.[0])
+}
+
+const prepareImportFile = async (file: File | undefined) => {
   pendingConfig.value = null
-  summary.value = null
-  selectedFileName.value = file?.name || ''
+  selectedFileName.value = ''
   if (!file) return
 
   try {
     const config = parseConfigFile(await file.text())
     pendingConfig.value = config
-    summary.value = getConfigSummary(config)
+    selectedFileName.value = file.name
   } catch (reason) {
-    selectedFileName.value = ''
-    input.value = ''
     error('无法导入', reason instanceof Error ? reason.message : String(reason))
+    if (fileInput.value) fileInput.value.value = ''
   }
+}
+
+const clearSelection = () => {
+  pendingConfig.value = null
+  selectedFileName.value = ''
+  if (fileInput.value) fileInput.value.value = ''
 }
 
 const confirmImport = async () => {
@@ -122,10 +136,7 @@ const confirmImport = async () => {
   try {
     await importConfig(pendingConfig.value)
     success('导入成功', '基础、背景、搜索引擎和快捷访问已恢复')
-    pendingConfig.value = null
-    summary.value = null
-    selectedFileName.value = ''
-    if (fileInput.value) fileInput.value.value = ''
+    clearSelection()
   } catch (reason) {
     error('导入失败', reason instanceof Error ? reason.message : String(reason))
   } finally {
@@ -136,81 +147,191 @@ const confirmImport = async () => {
 
 <style scoped>
 .transfer-page {
-  gap: 22px;
+  justify-content: center;
+  align-items: center;
 }
 
-.transfer-tool {
-  display: flex;
-  align-items: center;
+.transfer-shell {
+  width: min(430px, 100%);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.transfer-icon {
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
+.transfer-card {
+  min-width: 0;
+  height: 132px;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  color: var(--ui-text);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0)),
+    var(--ui-surface);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+  transition: border-color 0.16s, box-shadow 0.16s, transform 0.16s, background 0.16s;
+}
+
+.transfer-card:hover,
+.transfer-card.is-dragging {
+  border-color: rgba(37, 99, 235, 0.38);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12);
+  transform: translateY(-1px);
+}
+
+.transfer-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
+
+.transfer-card--import {
+  border-style: dashed;
+}
+
+.transfer-card-icon {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--ui-accent-soft);
   color: var(--ui-accent);
 }
 
-.transfer-copy {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  color: var(--ui-text);
+.transfer-card--import .transfer-card-icon {
+  color: #059669;
+  background: rgba(5, 150, 105, 0.1);
 }
 
-.transfer-copy strong {
+.transfer-card-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.transfer-card-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.transfer-card-text strong,
+.transfer-card-text span {
+  max-width: 100%;
   overflow: hidden;
-  font-size: 13px;
-  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.transfer-copy span {
-  font-size: 11px;
-  line-height: 1.45;
+.transfer-card-text strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.transfer-card-text span {
   color: var(--ui-text-muted);
+  font-size: 11px;
+}
+
+.upload-card {
+  grid-column: 1 / -1;
+  padding: 10px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  background: var(--ui-surface);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.07);
+}
+
+.upload-file {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.upload-icon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+}
+
+.upload-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.upload-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ui-text);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.transfer-btn {
+  min-width: 98px;
 }
 
 .file-input {
   display: none;
 }
 
-.import-confirm {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
+@media (prefers-color-scheme: dark) {
+  .transfer-card {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0)),
+      var(--ui-surface);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+  }
 
-.import-warning {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #b45309;
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.import-warning svg {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
+  .transfer-card--import .transfer-card-icon {
+    color: #34d399;
+    background: rgba(52, 211, 153, 0.12);
+  }
 }
 
 @media (max-width: 520px) {
-  .transfer-tool,
-  .import-confirm {
+  .transfer-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .upload-card,
+  .upload-actions {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .transfer-icon {
-    display: none;
+  .transfer-btn {
+    width: 100%;
   }
 }
 </style>

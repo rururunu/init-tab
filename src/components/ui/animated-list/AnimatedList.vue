@@ -6,37 +6,18 @@
       class="flex flex-col-reverse items-center gap-3"
       move-class="move"
     >
-      <!-- Only render the items up to the current index -->
-      <Motion
+      <div
         v-for="data in itemsToShow"
         :key="data.id"
-        as="div"
-        :initial="{ scale: 0, opacity: 0 }"
-        :animate="{
-          scale: 1,
-          opacity: 1,
-          y: 0,
-        }"
-        :exit="{
-          scale: 0,
-          opacity: 0,
-          y: 0,
-        }"
-        :transition="{
-          type: 'spring',
-          stiffness: 350,
-          damping: 40,
-        }"
         :class="cn('mx-auto w-full')"
       >
         <component :is="data.node" />
-      </Motion>
+      </div>
     </transition-group>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { Motion } from 'motion-v';
 import { computed, onMounted, ref, useSlots } from 'vue';
 import { cn } from '@/lib/utils';
 
@@ -89,5 +70,16 @@ async function wait(ms: number) {
 <style scoped>
 .move {
   transition: transform 0.4s ease-out;
+}
+
+.list-enter-active,
+.list-leave-active {
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.list-enter-from,
+.list-leave-to {
+  opacity: 0;
+  transform: scale(0);
 }
 </style>

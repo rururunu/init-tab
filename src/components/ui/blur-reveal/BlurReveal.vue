@@ -3,27 +3,19 @@
     ref="container"
     :class="props.class"
   >
-    <Motion
+    <div
       v-for="(child, index) in children"
       :key="index"
-      ref="childElements"
-      as="div"
-      :initial="getInitial()"
-      :in-view="getAnimate()"
-      :transition="{
-        duration: props.duration,
-        easing: 'easeInOut',
-        delay: props.delay * index,
-      }"
+      :style="getRevealStyle(index)"
     >
       <component :is="child" />
-    </Motion>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Motion } from 'motion-v';
 import { ref, onMounted, watchEffect, useSlots } from 'vue';
+import type { CSSProperties, VNode } from 'vue';
 
 interface Props {
   duration?: number;
@@ -41,32 +33,29 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const container = ref(null);
-const childElements = ref([]);
 const slots = useSlots();
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const children = ref<any>([]);
+const children = ref<VNode[]>([]);
+const isVisible = ref(false);
 
 onMounted(() => {
-  // This will reactively capture all content provided in the default slot
   watchEffect(() => {
     children.value = slots.default ? slots.default() : [];
   });
+  requestAnimationFrame(() => {
+    isVisible.value = true;
+  });
 });
 
-function getInitial() {
+function getRevealStyle(index: number): CSSProperties {
   return {
-    opacity: 0,
-    filter: `blur(${props.blur})`,
-    y: props.yOffset,
-  };
-}
-
-function getAnimate() {
-  return {
-    opacity: 1,
-    filter: `blur(0px)`,
-    y: 0,
+    opacity: isVisible.value ? 1 : 0,
+    filter: isVisible.value ? 'blur(0px)' : `blur(${props.blur})`,
+    transform: `translateY(${isVisible.value ? 0 : props.yOffset}px)`,
+    transition: [
+      `opacity ${props.duration}s ease-in-out ${props.delay * index}s`,
+      `filter ${props.duration}s ease-in-out ${props.delay * index}s`,
+      `transform ${props.duration}s ease-in-out ${props.delay * index}s`,
+    ].join(', '),
   };
 }
 </script>

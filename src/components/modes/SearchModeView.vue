@@ -1,8 +1,6 @@
 <template>
-  <!-- 单根节点包装，Transition 必须只有一个子元素 -->
   <div class="search-mode-view w-full h-full flex flex-col items-center justify-center relative pb-[25vh]">
 
-<!-- 时间和日期显示 -->
     <BlurReveal
       v-if="showTime || showDate"
       :delay="0.2"
@@ -39,7 +37,6 @@
       </div>
     </BlurReveal>
 
-    <!-- 搜索区域 -->
     <div
       class="w-full relative z-2 flex flex-col items-center justify-center"
     >
@@ -57,11 +54,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import dayjs from 'dayjs'
 import BlurReveal from '@/components/ui/blur-reveal/BlurReveal.vue'
 import SearchBar from '@/components/ui/search-bar/SearchBar.vue'
 import QuickLinks from '@/components/ui/QuickLinks.vue'
 import { useWallpaper } from '@/composables/useWallpaper'
+import { usePreferredColorScheme } from '@/composables/usePreferredColorScheme'
 
 withDefaults(defineProps<{ showQuickLinks?: boolean }>(), {
   showQuickLinks: true,
@@ -82,10 +79,7 @@ const {
   useCustomColor,
 } = useWallpaper()
 
-const isDark = ref(window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false)
-window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-  isDark.value = e.matches
-})
+const { isDark } = usePreferredColorScheme()
 
 const clockColor = computed(() => {
   if (useCustomColor.value) return themeColor.value
@@ -98,13 +92,23 @@ const time = ref('')
 
 let timer: ReturnType<typeof setInterval>
 
+const padTimeUnit = (value: number) => String(value).padStart(2, '0')
+
 const updateDateTime = () => {
-  const now = dayjs()
-  date.value = `${WEEKDAYS[now.day()]}  ·  ${now.format('YYYY年M月D日')}`
+  const now = new Date()
+  const hours = now.getHours()
+  const minutes = padTimeUnit(now.getMinutes())
+  const seconds = padTimeUnit(now.getSeconds())
+
+  date.value = `${WEEKDAYS[now.getDay()]}  ·  ${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`
   if (use24Hour.value) {
-    time.value = showSeconds.value ? now.format('HH:mm:ss') : now.format('HH:mm')
+    const value = `${padTimeUnit(hours)}:${minutes}`
+    time.value = showSeconds.value ? `${value}:${seconds}` : value
   } else {
-    time.value = showSeconds.value ? now.format('h:mm:ss A') : now.format('h:mm A')
+    const period = hours >= 12 ? 'PM' : 'AM'
+    const displayHours = hours % 12 || 12
+    const value = `${displayHours}:${minutes}`
+    time.value = showSeconds.value ? `${value}:${seconds} ${period}` : `${value} ${period}`
   }
 }
 

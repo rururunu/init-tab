@@ -60,7 +60,7 @@
                   <FaviconImg :url="engine.iconUrl || engine.jumpUrl" :size="16" />
                   <span class="dropdown-item-label">{{ engine.label }}</span>
                 </div>
-                <span v-if="index === selectedEngineIndex" class="bookmark-enter">Enter</span>
+                <kbd v-if="index === selectedEngineIndex" class="keyboard-key">Enter</kbd>
                 <Icon
                   v-else-if="engine.key.includes(defaultKey)"
                   icon="material-symbols:check-rounded"
@@ -124,7 +124,7 @@
                   <FaviconImg :url="engine.iconUrl || engine.jumpUrl" :size="16" />
                   <span class="dropdown-item-label">{{ engine.label }}</span>
                 </div>
-                <span v-if="index === selectedEngineIndex" class="bookmark-enter">Enter</span>
+                <kbd v-if="index === selectedEngineIndex" class="keyboard-key">Enter</kbd>
                 <span v-else class="dropdown-item-key">{{ engine.key.join(' / ') }}</span>
               </div>
               <div v-if="filteredEngines.length === 0" class="dropdown-empty">无匹配引擎</div>
@@ -156,7 +156,7 @@
                   <div class="bookmark-title">{{ bookmark.title }}</div>
                   <div class="bookmark-url">{{ bookmark.url }}</div>
                 </div>
-                <span v-if="index === selectedBookmarkIndex" class="bookmark-enter">Enter</span>
+                <kbd v-if="index === selectedBookmarkIndex" class="keyboard-key">Enter</kbd>
               </div>
               <div v-if="bookmarkResults.length === 0" class="dropdown-empty">未找到匹配的收藏夹</div>
               <div v-if="bookmarkResults.length > 5" class="dropdown-more">
@@ -678,32 +678,36 @@ onBeforeUnmount(() => {
 }
 
 .dropdown-hints {
-  font-size: 10px;
-  font-weight: 500;
-  color: #9ca3af;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex-shrink: 0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
   white-space: nowrap;
 }
 
-.dropdown-hints kbd {
+.dropdown-hints kbd,
+.keyboard-key {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  margin: 0 1px;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(255, 255, 255, 0.9);
-  font-size: 10px;
-  font-family: inherit;
-  font-weight: 600;
-  color: #6b7280;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 5px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
+  box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
+  color: #475569;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 18px;
+  white-space: nowrap;
 }
 
 .dropdown-body {
@@ -745,13 +749,25 @@ onBeforeUnmount(() => {
 }
 
 .dropdown-item-key {
-  font-size: 11px;
-  color: #9ca3af;
-  font-family: monospace;
-  background: rgba(0, 0, 0, 0.05);
-  padding: 2px 8px;
-  border-radius: 6px;
+  min-width: 124px;
+  height: 30px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  padding: 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.92);
+  box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.04);
+  color: #64748b;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .bookmark-info {
@@ -777,11 +793,19 @@ onBeforeUnmount(() => {
   margin-top: 1px;
 }
 
-.bookmark-enter {
-  font-size: 11px;
-  color: #3b82f6;
-  font-weight: 500;
+.keyboard-key {
   flex-shrink: 0;
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.28);
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.98), rgba(219, 234, 254, 0.88));
+}
+
+.dropdown-item > .keyboard-key {
+  min-width: 58px;
+  height: 30px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  line-height: 30px;
 }
 
 .dropdown-empty {

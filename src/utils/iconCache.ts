@@ -1,6 +1,6 @@
 // 图标缓存工具 — Favicon 按域名缓存（带时间戳 / TTL）
 // 内存 Map + chrome.storage.local / localStorage
-import { storage } from './storage';
+import { isChromeStorageAvailable, storage } from './storage';
 
 const FAVICON_CACHE_PREFIX = 'favicon_';
 const MAX_MEMORY_ENTRIES = 300;
@@ -141,6 +141,39 @@ const persistEntry = async (domain: string, entry: FaviconCacheEntry): Promise<v
   } catch {
     // 配额不足时忽略
   }
+};
+
+const readStoredFaviconEntries = async (
+  domains: string[]
+): Promise<Map<string, FaviconCacheEntry | null>> => {
+  const entries = new Map<string, FaviconCacheEntry | null>();
+  if (domains.length === 0) return entries;
+
+  if (isChromeStorageAvailable()) {
+    const keys = domains.map(getCacheKey);
+    const items = await chrome.storage.local.get(keys);
+    for (const domain of domains) {
+      entries.set(domain, parseEntry(items[getCacheKey(domain)]));
+    }
+    return entries;
+  }
+
+  for (const domain of domains) {
+    const raw = localStorage.getItem(getCacheKey(domain));
+    if (!raw) {
+      entries.set(domain, null);
+      continue;
+    }
+
+    let parsed: unknown = raw;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+    }
+    entries.set(domain, parseEntry(parsed) || parseEntry(raw));
+  }
+
+  return entries;
 };
 
 /**
@@ -294,6 +327,7 @@ export const refreshStaleFavicons = async (
   if (domainToUrl.size === 0) return;
 
   const staleUrls: string[] = [];
+  const storageMisses: Array<[string, string]> = [];
 
   for (const [domain, url] of domainToUrl) {
     const mem = memoryCache.get(domain);
@@ -301,17 +335,22 @@ export const refreshStaleFavicons = async (
       if (isStale(mem.fetchedAt, ttlMs)) staleUrls.push(url);
       continue;
     }
+    storageMisses.push([domain, url]);
+  }
 
-    try {
-      const stored = await storage.get<unknown>(getCacheKey(domain));
-      const entry = parseEntry(stored);
-      if (entry) {
-        addToMemoryCache(domain, entry);
-        if (isStale(entry.fetchedAt, ttlMs)) staleUrls.push(url);
-      } else {
+  try {
+    const storedEntries = await readStoredFaviconEntries(storageMisses.map(([domain]) => domain));
+    for (const [domain, url] of storageMisses) {
+      const entry = storedEntries.get(domain) ?? null;
+      if (!entry) {
         staleUrls.push(url);
+        continue;
       }
-    } catch {
+      addToMemoryCache(domain, entry);
+      if (isStale(entry.fetchedAt, ttlMs)) staleUrls.push(url);
+    }
+  } catch {
+    for (const [, url] of storageMisses) {
       staleUrls.push(url);
     }
   }

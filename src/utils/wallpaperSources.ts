@@ -99,6 +99,7 @@ const RATIO_PRESETS = [
   { id: '32x9', value: 32 / 9 },
   { id: '4x3', value: 4 / 3 },
 ] as const;
+type RatioPreset = (typeof RATIO_PRESETS)[number];
 
 /**
  * 根据当前屏幕（含 DPR，上限 2）计算目标分辨率
@@ -134,7 +135,7 @@ export function getTargetResolution(): ScreenResolution {
 function pickClosestRatio(w: number, h: number): string {
   if (!w || !h) return '16x9';
   const r = w / h;
-  let best = RATIO_PRESETS[0];
+  let best: RatioPreset = RATIO_PRESETS[0];
   let bestDiff = Math.abs(r - best.value);
   for (const preset of RATIO_PRESETS) {
     const diff = Math.abs(r - preset.value);

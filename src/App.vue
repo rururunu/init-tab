@@ -9,6 +9,7 @@ import { useWallpaper } from './composables/useWallpaper'
 import { storage } from '@/utils/storage'
 import { hydrateFaviconCache, refreshStaleFavicons } from '@/utils/iconCache'
 import { useNotification } from '@/composables/useNotification'
+import { usePreferredColorScheme } from '@/composables/usePreferredColorScheme'
 import { getWallpaperSourceMeta, type WallpaperSourceId } from '@/utils/wallpaperSources'
 
 const {
@@ -40,6 +41,7 @@ interface FavoriteWallpaper {
 
 const favoriteWallpapers = ref<FavoriteWallpaper[]>([])
 let unsubFavoriteWallpapers: (() => void) | undefined
+let unsubAppConfig: (() => void) | undefined
 
 const parseFavoriteWallpapers = (value: unknown): FavoriteWallpaper[] => {
   try {
@@ -68,11 +70,7 @@ const isCurrentWallpaperFavorite = computed(() =>
   favoriteWallpapers.value.some((favorite) => favorite.url === currentWallpaperUrl.value)
 )
 
-// 顶部图标颜色：有壁纸或暗色 → 亮白；亮色无壁纸 → 深灰
-const isDark = ref(window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false)
-window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-  isDark.value = e.matches
-})
+const { isDark } = usePreferredColorScheme()
 const topIconColor = computed(() => {
   if (wallpaperType.value !== 'none' || isDark.value) return '#f5f5facc'
   return '#374151cc'
@@ -141,19 +139,22 @@ onMounted(async () => {
   try {
     isLoading.value = false
 
-    const savedQuickLinksVisibility = await storage.get<string | boolean>(QUICK_LINKS_VISIBILITY_KEY)
+    const [
+      savedQuickLinksVisibility,
+      storedFavoriteWallpapers,
+    ] = await Promise.all([
+      storage.get<string | boolean>(QUICK_LINKS_VISIBILITY_KEY),
+      storage.get<string | FavoriteWallpaper[]>(FAVORITE_WALLPAPERS_KEY),
+      hydrateFaviconCache(),
+      loadState(),
+    ])
+
     showQuickLinks.value = savedQuickLinksVisibility !== false && savedQuickLinksVisibility !== 'false'
-    favoriteWallpapers.value = parseFavoriteWallpapers(
-      await storage.get<string | FavoriteWallpaper[]>(FAVORITE_WALLPAPERS_KEY)
-    )
+    favoriteWallpapers.value = parseFavoriteWallpapers(storedFavoriteWallpapers)
     unsubFavoriteWallpapers = storage.onChange(FAVORITE_WALLPAPERS_KEY, (changes) => {
       favoriteWallpapers.value = parseFavoriteWallpapers(changes[FAVORITE_WALLPAPERS_KEY]?.newValue)
     })
 
-    // 恢复 favicon 内存缓存，供搜索栏瞬间命中
-    await hydrateFaviconCache()
-
-    // 预缓存书签，供搜索模式的 SearchBar / Alt+S 使用
     let bookmarkUrls: string[] = []
     if ((window as any).chrome?.bookmarks) {
       const all = await (window as any).chrome.bookmarks.search({})
@@ -162,16 +163,14 @@ onMounted(async () => {
       await storage.set('cachedBookmarks', JSON.stringify(valid))
     }
 
-    // 进入标签页：缺失或超过 7 天的收藏夹图标后台重新拉取（不阻塞首屏）
     if (bookmarkUrls.length) {
       refreshStaleFavicons(bookmarkUrls).catch(() => {})
     }
 
-    await loadState()
-
-    // 兼容旧壁纸存储格式
-    const savedType = await storage.get('wallpaperType')
-    const savedUrl  = await storage.get('wallpaperUrl')
+    const [savedType, savedUrl] = await Promise.all([
+      storage.get('wallpaperType'),
+      storage.get('wallpaperUrl'),
+    ])
     if (savedType && savedUrl) {
       wallpaperType.value = savedType as 'none' | 'source' | 'custom'
       if (wallpaperType.value !== 'none') {
@@ -179,13 +178,10 @@ onMounted(async () => {
       }
     }
 
-    // 监听 chrome.storage 变化（设置面板写入后实时生效）
-    if ((window as any).chrome?.storage?.local?.onChanged) {
-      ;(window as any).chrome.storage.local.onChanged.addListener(
-        (changes: Record<string, { newValue: any }>) => {
-          if (changes.appConfig) loadState()
-        }
-      )
+    if (!unsubAppConfig) {
+      unsubAppConfig = storage.onChange('appConfig', () => {
+        void loadState(true)
+      })
     }
   } catch (e) {
     console.error('App init error:', e)
@@ -194,12 +190,12 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unsubFavoriteWallpapers?.()
+  unsubAppConfig?.()
 })
 </script>
 
 <template>
   <div class="relative min-h-screen w-full transition-all duration-300">
-    <!-- 加载中遮罩 -->
     <Transition
       enter-active-class="transition-opacity duration-300 ease-out"
       enter-from-class="opacity-0"
@@ -228,7 +224,6 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
 
-    <!-- 主内容 -->
     <div class="relative z-10">
       <div
         id="base"
@@ -236,7 +231,6 @@ onBeforeUnmount(() => {
         :class="{ 'has-background': wallpaperType !== 'none' }"
         :style="getWallpaperStyle()"
       >
-        <!-- 壁纸遮罩 -->
         <Transition
           enter-active-class="transition-opacity duration-500 ease-out"
           enter-from-class="opacity-0"
@@ -248,7 +242,6 @@ onBeforeUnmount(() => {
           <div v-if="wallpaperType !== 'none' && showMask" id="mask" class="z-0" />
         </Transition>
 
-        <!-- 右上角操作区 -->
         <div id="setup" class="z-[200]">
           <button
             v-if="currentWallpaperUrl"
@@ -290,7 +283,6 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <!-- 壁纸源：右下角刷新 -->
         <button
           v-if="wallpaperType === 'source'"
           type="button"
@@ -310,7 +302,6 @@ onBeforeUnmount(() => {
 
         <SearchModeView :show-quick-links="showQuickLinks" />
 
-        <!-- 设置弹窗 -->
         <Dialog
           :show="setup.show"
           :select="setUpSelect"
