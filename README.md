@@ -4,6 +4,7 @@
   <p>想去哪，就去哪。</p>
   <p>一个简洁、可定制的浏览器新标签页，也是一套随时可用的搜索启动器。</p>
 
+  <a href="https://microsoftedge.microsoft.com/addons/detail/launchpad/mooiphlmpfndbnicaeaemmdpnolkhamh"> Edge安装</a> ·
   <a href="https://github.com/rururunu/init-tab/releases/latest">下载最新版</a> ·
   <a href="#使用说明">使用说明</a> ·
   <a href="#本地开发">本地开发</a>
@@ -24,6 +25,8 @@
 ## 安装
 
 LaunchPad 目前以 Chromium 扩展提供，可用于 Chrome、Edge 等兼容浏览器。
+
+如果您使用的试 Edge 可以直接前往 [microsoftedge](https://microsoftedge.microsoft.com/addons/detail/launchpad/mooiphlmpfndbnicaeaemmdpnolkhamh) 直接安装此插件
 
 1. 前往 [Releases](https://github.com/rururunu/init-tab/releases/latest) 下载最新的 `LaunchPad.zip`。
 2. 解压下载的文件。
